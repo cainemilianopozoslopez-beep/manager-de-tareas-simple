@@ -52,18 +52,19 @@ const DEFAULT_GUEST_TASKS = [
 ];
 
 export default function App() {
-  // Authentication State (Local Storage for persistent users, Session Storage for Guests)
+  // Authentication & Local User State (Enters directly into Pulse Matrix)
   const [user, setUser] = useState(() => {
-    const savedSession = sessionStorage.getItem('gmail_task_guest_user');
-    if (savedSession) return JSON.parse(savedSession);
     const savedLocal = localStorage.getItem('gmail_task_user');
-    return savedLocal ? JSON.parse(savedLocal) : null;
+    if (savedLocal) return JSON.parse(savedLocal);
+    const defaultUser = { username: 'Caín', isGuest: true, theme: 'light' };
+    localStorage.setItem('gmail_task_user', JSON.stringify(defaultUser));
+    return defaultUser;
   });
 
-  // Guest Tasks State (stored only in sessionStorage)
+  // Local Tasks State (Stored persistently in localStorage)
   const [guestTasks, setGuestTasks] = useState(() => {
-    const savedGuestTasks = sessionStorage.getItem('gmail_task_guest_tasks');
-    return savedGuestTasks ? JSON.parse(savedGuestTasks) : DEFAULT_GUEST_TASKS;
+    const savedLocalTasks = localStorage.getItem('gmail_task_local_tasks') || sessionStorage.getItem('gmail_task_guest_tasks');
+    return savedLocalTasks ? JSON.parse(savedLocalTasks) : DEFAULT_GUEST_TASKS;
   });
 
   // Theme State ('light' | 'dark')
@@ -115,10 +116,10 @@ export default function App() {
   const toastTimeoutRef = useRef(null);
   const UNDO_WINDOW_MS = 5000;
 
-  // Synchronize Guest Tasks to sessionStorage
+  // Synchronize Tasks to localStorage so they persist across sessions
   useEffect(() => {
     if (user?.isGuest) {
-      sessionStorage.setItem('gmail_task_guest_tasks', JSON.stringify(guestTasks));
+      localStorage.setItem('gmail_task_local_tasks', JSON.stringify(guestTasks));
     }
   }, [guestTasks, user]);
 
