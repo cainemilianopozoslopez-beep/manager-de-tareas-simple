@@ -9,17 +9,62 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const getStoredAccounts = () => {
+    try {
+      const data = localStorage.getItem('gmail_task_accounts');
+      if (data) return JSON.parse(data);
+    } catch (e) {}
+    const defaultAccs = {
+      'caín': { username: 'Caín', password: '123' },
+      'cain': { username: 'Caín', password: '123' }
+    };
+    localStorage.setItem('gmail_task_accounts', JSON.stringify(defaultAccs));
+    return defaultAccs;
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
 
     const inputVal = emailOrUser.trim();
+    const passVal = password.trim();
+
     if (!inputVal) {
       setError('Por favor ingresa tu nombre de cuenta o usuario.');
       return;
     }
 
-    onLoginSuccess({ username: inputVal, isGuest: false, theme: 'light' });
+    if (!passVal) {
+      setError('Por favor ingresa tu contraseña.');
+      return;
+    }
+
+    const accounts = getStoredAccounts();
+    const accountKey = inputVal.toLowerCase();
+
+    if (isRegistering) {
+      if (accounts[accountKey]) {
+        setError(`La cuenta "${inputVal}" ya existe. Intenta iniciar sesión.`);
+        return;
+      }
+      // Register new local account
+      accounts[accountKey] = { username: inputVal, password: passVal };
+      localStorage.setItem('gmail_task_accounts', JSON.stringify(accounts));
+      onLoginSuccess({ username: inputVal, isGuest: false, theme: 'light' });
+    } else {
+      // Validate credentials
+      const existingAccount = accounts[accountKey];
+      if (!existingAccount) {
+        setError(`La cuenta "${inputVal}" no existe. Haz clic en "¿No tienes cuenta? Registrate" para crearla.`);
+        return;
+      }
+      if (existingAccount.password !== passVal) {
+        setError('Contraseña incorrecta. Por favor verifica tus datos.');
+        return;
+      }
+
+      onLoginSuccess({ username: existingAccount.username, isGuest: false, theme: 'light' });
+    }
   };
 
   return (
