@@ -9,62 +9,17 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
 
     const inputVal = emailOrUser.trim();
-    const passVal = password.trim();
-
-    if (!inputVal || !passVal) {
-      setError('Por favor completa todos los campos.');
-      setLoading(false);
+    if (!inputVal) {
+      setError('Por favor ingresa tu nombre de cuenta o usuario.');
       return;
     }
 
-    const isEmail = inputVal.includes('@');
-    const emailToUse = isEmail ? inputVal : `${inputVal.toLowerCase().replace(/\s+/g, '')}@gmail-tasks.app`;
-
-    try {
-      let userObj = null;
-
-      // 1. Try Firebase Auth if configured
-      try {
-        if (isRegistering) {
-          const res = await registerWithEmail(emailToUse, passVal);
-          userObj = { username: inputVal, email: res.user.email, uid: res.user.uid };
-        } else {
-          const res = await loginWithEmail(emailToUse, passVal);
-          userObj = { username: inputVal, email: res.user.email, uid: res.user.uid };
-        }
-      } catch (firebaseErr) {
-        // 2. Try Local Express Backend if running
-        const endpoint = isRegistering ? 'register' : 'login';
-        const localRes = await fetch(`http://localhost:5000/api/auth/${endpoint}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: inputVal, password: passVal })
-        }).catch(() => null);
-
-        if (localRes && localRes.ok) {
-          const data = await localRes.json();
-          userObj = data.user;
-        } else {
-          // 3. Web standalone account login fallback
-          userObj = { username: inputVal, isGuest: false, theme: 'light' };
-        }
-      }
-
-      if (userObj) {
-        onLoginSuccess(userObj);
-      }
-    } catch (err) {
-      console.error('Error de inicio de sesión:', err);
-      onLoginSuccess({ username: inputVal, isGuest: false, theme: 'light' });
-    } finally {
-      setLoading(false);
-    }
+    onLoginSuccess({ username: inputVal, isGuest: false, theme: 'light' });
   };
 
   return (
