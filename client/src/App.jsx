@@ -12,6 +12,7 @@ import StatsDashboard from './components/StatsDashboard';
 import CalendarView from './components/CalendarView';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { getTodayStr, dateStrDaysFromToday, advanceRecurringTasks, filterTasks, filterByTab, filterByCategory, filterBySearch } from './taskUtils';
+import { subscribeUserTasks, addFirebaseTask, updateFirebaseTask, deleteFirebaseTask, logoutUser } from './firebase';
 
 const API_BASE = 'http://localhost:5000/api';
 
@@ -278,38 +279,57 @@ export default function App() {
     }
   }, [allTasks, showToast, requestNotificationPermission]);
 
-  // Fetch Tasks (Handles both Server DB for registered users and Session Storage for Guests)
+  // Subscribe to Firestore Tasks in real-time when user has a Firebase UID
+  useEffect(() => {
+    if (!user || user.isGuest || !user.uid) return;
+
+    setLoading(true);
+    const unsubscribe = subscribeUserTasks(user.uid, (firestoreTasks) => {
+      const advanced = advanceRecurringTasks(firestoreTasks);
+      setAllTasks(advanced);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Fetch Tasks (Handles Server DB, Firestore, or Guest Session Storage)
   const fetchTasks = useCallback(async () => {
     if (!user) return;
 
     if (user.isGuest) {
-      // Roll forward any recurring guest task whose date has passed, persisting the change.
       const advancedGuestTasks = advanceRecurringTasks(guestTasks);
       if (advancedGuestTasks !== guestTasks) {
         setGuestTasks(advancedGuestTasks);
       }
-
-      // Filter guest tasks in memory using the same helper the server route uses.
       const filtered = filterTasks(advancedGuestTasks, {
         tab: currentTab,
         category: currentCategory,
         search: debouncedSearch
       });
-
       setTasks(filtered);
       setAllTasks(advancedGuestTasks);
       return;
     }
 
-    // Registered user: fetch from Server DB
+    if (user.uid) {
+      // User is authenticated via Firebase: filter in-memory from Firestore allTasks
+      const filtered = filterTasks(allTasks, {
+        tab: currentTab,
+        category: currentCategory,
+        search: debouncedSearch
+      });
+      setTasks(filtered);
+      return;
+    }
+
+    // Registered user fallback to local Express Server DB
     setLoading(true);
     try {
       let url = `${API_BASE}/tasks?filter=${currentTab}`;
       if (currentCategory) url += `&category=${encodeURIComponent(currentCategory)}`;
       if (debouncedSearch) url += `&search=${encodeURIComponent(debouncedSearch)}`;
 
-      // The filtered list and the "all" list are independent reads — fire them in
-      // parallel instead of awaiting one after the other.
       const [res, allRes] = await Promise.all([
         fetch(url),
         fetch(`${API_BASE}/tasks?filter=all`)
@@ -322,7 +342,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [user, currentTab, currentCategory, debouncedSearch, guestTasks]);
+  }, [user, currentTab, currentCategory, debouncedSearch, guestTasks, allTasks]);
 
   // Fetch Settings
   const fetchSettings = useCallback(async () => {
@@ -500,14 +520,35 @@ export default function App() {
           updatedAt: new Date().toISOString()
         };
         setGuestTasks(prev => [newTask, ...prev]);
-        // A leftover category/search filter would otherwise hide the task you just
-        // created with no obvious explanation, so drop back to the unfiltered inbox.
         setCurrentTab('inbox');
         setCurrentCategory('');
         setSearchQuery('');
         showToast('Nueva tarea temporal creada');
       }
       return;
+    }
+
+    if (user?.uid) {
+      try {
+        if (taskData.id) {
+          await updateFirebaseTask(user.uid, taskData.id, taskData);
+          showToast('Tarea actualizada correctamente');
+        } else {
+          await addFirebaseTask(user.uid, {
+            ...taskData,
+            starred: false,
+            done: false,
+            trash: false
+          });
+          showToast('Nueva tarea guardada en la nube');
+          setCurrentTab('inbox');
+          setCurrentCategory('');
+          setSearchQuery('');
+        }
+        return;
+      } catch (err) {
+        console.error('Error en Firestore:', err);
+      }
     }
 
     try {
@@ -533,8 +574,6 @@ export default function App() {
         if (res.ok) {
           showToast('Nueva tarea añadida a tus pendientes');
           fetchTasks();
-          // Same reason as the guest branch above: don't leave the new task hidden
-          // behind whatever filter happened to be active.
           setCurrentTab('inbox');
           setCurrentCategory('');
           setSearchQuery('');
@@ -561,6 +600,16 @@ export default function App() {
       return;
     }
 
+    if (user?.uid) {
+      try {
+        await updateFirebaseTask(user.uid, id, { done: nextDone, subtasks: nextSubtasks });
+        showToast(nextDone ? 'Tarea marcada como realizada' : 'Tarea reabierta como pendiente');
+        return;
+      } catch (err) {
+        console.error('Error en Firestore:', err);
+      }
+    }
+
     try {
       const res = await fetch(`${API_BASE}/tasks/${id}`, {
         method: 'PUT',
@@ -585,6 +634,18 @@ export default function App() {
     if (user?.isGuest) {
       setGuestTasks(prev => prev.map(t => t.id === id ? { ...t, starred: !t.starred, updatedAt: new Date().toISOString() } : t));
       return;
+    }
+
+    if (user?.uid) {
+      try {
+        const target = allTasks.find(t => t.id === id);
+        if (target) {
+          await updateFirebaseTask(user.uid, id, { starred: !target.starred });
+        }
+        return;
+      } catch (err) {
+        console.error('Error en Firestore:', err);
+      }
     }
 
     try {
@@ -615,6 +676,22 @@ export default function App() {
         }
       });
       return;
+    }
+
+    if (user?.uid) {
+      try {
+        const target = allTasks.find(t => t.id === id);
+        if (target) {
+          if (!target.trash) {
+            await updateFirebaseTask(user.uid, id, { trash: true });
+          } else {
+            await deleteFirebaseTask(user.uid, id);
+          }
+        }
+        return;
+      } catch (err) {
+        console.error('Error en Firestore:', err);
+      }
     }
 
     try {
@@ -840,22 +917,33 @@ export default function App() {
     if (user?.isGuest) {
       setGuestTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t));
       showToast('Tarea movida de cuadrante', 'success');
-    } else {
+      return;
+    }
+
+    if (user?.uid) {
       try {
-        const res = await fetch(`${API_BASE}/tasks/${taskId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updates)
-        });
-        if (res.ok) {
-          fetchTasks();
-          showToast('Tarea movida de cuadrante', 'success');
-        } else {
-          showToast('Error al mover tarea', 'error');
-        }
+        await updateFirebaseTask(user.uid, taskId, updates);
+        showToast('Tarea movida de cuadrante', 'success');
+        return;
       } catch (err) {
-        showToast('Error de conexión', 'error');
+        console.error('Error en Firestore:', err);
       }
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      if (res.ok) {
+        fetchTasks();
+        showToast('Tarea movida de cuadrante', 'success');
+      } else {
+        showToast('Error al mover tarea', 'error');
+      }
+    } catch (err) {
+      showToast('Error de conexión', 'error');
     }
   };
 
@@ -880,21 +968,31 @@ export default function App() {
 
     if (user?.isGuest) {
       setGuestTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates, updatedAt: new Date().toISOString() } : t));
-    } else {
+      return;
+    }
+
+    if (user?.uid) {
       try {
-        const res = await fetch(`${API_BASE}/tasks/${taskId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updates)
-        });
-        if (res.ok) {
-          fetchTasks();
-        } else {
-          showToast('Error al actualizar paso', 'error');
-        }
+        await updateFirebaseTask(user.uid, taskId, updates);
+        return;
       } catch (err) {
-        showToast('Error de conexión', 'error');
+        console.error('Error en Firestore:', err);
       }
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      if (res.ok) {
+        fetchTasks();
+      } else {
+        showToast('Error al actualizar paso', 'error');
+      }
+    } catch (err) {
+      showToast('Error de conexión', 'error');
     }
   };
 
