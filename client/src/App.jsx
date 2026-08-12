@@ -52,13 +52,12 @@ const DEFAULT_GUEST_TASKS = [
 ];
 
 export default function App() {
-  // Authentication & Local User State (Enters directly into Pulse Matrix)
+  // Authentication State (Saved Account or Guest Session)
   const [user, setUser] = useState(() => {
+    const savedSession = sessionStorage.getItem('gmail_task_guest_user');
+    if (savedSession) return JSON.parse(savedSession);
     const savedLocal = localStorage.getItem('gmail_task_user');
-    if (savedLocal) return JSON.parse(savedLocal);
-    const defaultUser = { username: 'Caín', isGuest: true, theme: 'light' };
-    localStorage.setItem('gmail_task_user', JSON.stringify(defaultUser));
-    return defaultUser;
+    return savedLocal ? JSON.parse(savedLocal) : null;
   });
 
   // Local Tasks State (Stored persistently in localStorage)
