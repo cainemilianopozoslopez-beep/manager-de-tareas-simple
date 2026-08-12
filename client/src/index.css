@@ -1,0 +1,381 @@
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap');
+
+:root {
+  /* Light Theme (Pulse Modern) */
+  --pulse-bg: #f8fafc;
+  --pulse-surface: #ffffff;
+  --pulse-surface-elevated: #ffffff;
+  --pulse-sidebar-bg: #f1f5f9;
+  --pulse-active-tab: #e0f2fe;
+  --pulse-active-text: #0369a1;
+  --pulse-hover: #f1f5f9;
+  --pulse-border: #e2e8f0;
+  --pulse-border-hover: #cbd5e1;
+  --pulse-text-primary: #0f172a;
+  --pulse-text-secondary: #475569;
+  --pulse-text-muted: #94a3b8;
+  --pulse-accent: #3b82f6;
+  --pulse-accent-hover: #2563eb;
+  --pulse-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08);
+  --pulse-shadow-card: 0 2px 8px -1px rgba(15, 23, 42, 0.06);
+
+  /* Quadrant Accents (Light) */
+  --pulse-q1-accent: #ef4444; /* Hacer Ya - Crimson */
+  --pulse-q1-bg: rgba(239, 68, 68, 0.05);
+  --pulse-q1-border: rgba(239, 68, 68, 0.2);
+
+  --pulse-q2-accent: #3b82f6; /* Planificar - Cobalt */
+  --pulse-q2-bg: rgba(59, 130, 246, 0.05);
+  --pulse-q2-border: rgba(59, 130, 246, 0.2);
+
+  --pulse-q3-accent: #f59e0b; /* Delegar - Amber */
+  --pulse-q3-bg: rgba(245, 158, 11, 0.05);
+  --pulse-q3-border: rgba(245, 158, 11, 0.2);
+
+  --pulse-q4-accent: #10b981; /* Revisar - Emerald */
+  --pulse-q4-bg: rgba(16, 185, 129, 0.05);
+  --pulse-q4-border: rgba(16, 185, 129, 0.2);
+
+  /* Legacy Gmail Variable Aliases for Backward Compatibility */
+  --gmail-bg: var(--pulse-bg);
+  --gmail-surface: var(--pulse-surface);
+  --gmail-sidebar-bg: var(--pulse-sidebar-bg);
+  --gmail-active-tab: var(--pulse-active-tab);
+  --gmail-active-text: var(--pulse-active-text);
+  --gmail-hover: var(--pulse-hover);
+  --gmail-border: var(--pulse-border);
+  --gmail-red: var(--pulse-q1-accent);
+  --gmail-red-dark: #dc2626;
+  --gmail-blue: var(--pulse-accent);
+  --gmail-text-primary: var(--pulse-text-primary);
+  --gmail-text-secondary: var(--pulse-text-secondary);
+  --gmail-text-muted: var(--pulse-text-muted);
+  --gmail-compose-bg: var(--pulse-accent);
+  --gmail-compose-hover: var(--pulse-accent-hover);
+  --gmail-modal-bg: var(--pulse-surface);
+  --gmail-search-bg: var(--pulse-sidebar-bg);
+  --gmail-card-bg: var(--pulse-surface);
+}
+
+[data-theme="dark"] {
+  /* Dark Theme (Pulse Obsidian) */
+  --pulse-bg: #090d16;
+  --pulse-surface: #111827;
+  --pulse-surface-elevated: #1f2937;
+  --pulse-sidebar-bg: #0f172a;
+  --pulse-active-tab: rgba(56, 189, 248, 0.15);
+  --pulse-active-text: #38bdf8;
+  --pulse-hover: #1e293b;
+  --pulse-border: #1f2937;
+  --pulse-border-hover: #374151;
+  --pulse-text-primary: #f8fafc;
+  --pulse-text-secondary: #94a3b8;
+  --pulse-text-muted: #64748b;
+  --pulse-accent: #38bdf8;
+  --pulse-accent-hover: #0284c7;
+  --pulse-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  --pulse-shadow-card: 0 4px 12px rgba(0, 0, 0, 0.3);
+
+  /* Quadrant Accents (Dark) */
+  --pulse-q1-accent: #f87171;
+  --pulse-q1-bg: rgba(248, 113, 113, 0.08);
+  --pulse-q1-border: rgba(248, 113, 113, 0.25);
+
+  --pulse-q2-accent: #60a5fa;
+  --pulse-q2-bg: rgba(96, 165, 250, 0.08);
+  --pulse-q2-border: rgba(96, 165, 250, 0.25);
+
+  --pulse-q3-accent: #fbbf24;
+  --pulse-q3-bg: rgba(251, 191, 36, 0.08);
+  --pulse-q3-border: rgba(251, 191, 36, 0.25);
+
+  --pulse-q4-accent: #34d399;
+  --pulse-q4-bg: rgba(52, 211, 153, 0.08);
+  --pulse-q4-border: rgba(52, 211, 153, 0.25);
+
+  /* Legacy Gmail Variable Aliases */
+  --gmail-bg: var(--pulse-bg);
+  --gmail-surface: var(--pulse-surface);
+  --gmail-sidebar-bg: var(--pulse-sidebar-bg);
+  --gmail-active-tab: var(--pulse-active-tab);
+  --gmail-active-text: var(--pulse-active-text);
+  --gmail-hover: var(--pulse-hover);
+  --gmail-border: var(--pulse-border);
+  --gmail-red: var(--pulse-q1-accent);
+  --gmail-red-dark: #ef4444;
+  --gmail-blue: var(--pulse-accent);
+  --gmail-text-primary: var(--pulse-text-primary);
+  --gmail-text-secondary: var(--pulse-text-secondary);
+  --gmail-text-muted: var(--pulse-text-muted);
+  --gmail-compose-bg: var(--pulse-active-tab);
+  --gmail-compose-hover: rgba(56, 189, 248, 0.25);
+  --gmail-modal-bg: var(--pulse-surface-elevated);
+  --gmail-search-bg: var(--pulse-surface-elevated);
+  --gmail-card-bg: var(--pulse-surface);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Theme-transition only the surfaces/text that actually recolor on light<->dark,
+   instead of animating every property on every element in the tree. */
+body,
+.app-sidebar,
+.app-header,
+[class^="badge-"],
+[class^="pill-"] {
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+body {
+  font-family: 'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--gmail-bg);
+  color: var(--gmail-text-primary);
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+
+input, textarea, select {
+  font-family: inherit;
+}
+
+/* In dark mode, let native controls (the date/time picker popups, the calendar/clock
+   indicator icons, select dropdowns, spin buttons) render with the dark palette
+   instead of light-on-light. */
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] select {
+  color-scheme: dark;
+}
+
+/* Keyboard focus indicator. The default outline was removed app-wide; restore a
+   visible ring for keyboard users (not on mouse click) so focus is never invisible. */
+:focus-visible {
+  outline: 2px solid var(--gmail-blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #c4c7c5;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a8abab;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.25s cubic-bezier(0, 0, 0.2, 1) forwards;
+}
+
+/* Priority Badges */
+.badge-urgente {
+  background-color: #fce8e6;
+  color: #c5221f;
+  border: 1px solid #fad2cf;
+}
+.badge-alta {
+  background-color: #fef7e0;
+  color: #b06000;
+  border: 1px solid #feefc3;
+}
+.badge-media {
+  background-color: #e8f0fe;
+  color: #1967d2;
+  border: 1px solid #d2e3fc;
+}
+.badge-baja {
+  background-color: #f1f3f4;
+  color: #5f6368;
+  border: 1px solid #e8eaed;
+}
+
+[data-theme="dark"] .badge-urgente {
+  background-color: #4a1d1b;
+  color: #f28b82;
+  border: 1px solid #632220;
+}
+[data-theme="dark"] .badge-alta {
+  background-color: #3e2d14;
+  color: #fdd663;
+  border: 1px solid #573e1b;
+}
+[data-theme="dark"] .badge-media {
+  background-color: #19385c;
+  color: #8ab4f8;
+  border: 1px solid #234b7a;
+}
+[data-theme="dark"] .badge-baja {
+  background-color: #2d2f34;
+  color: #9aa0a6;
+  border: 1px solid #3c4043;
+}
+
+/* Category Pills */
+.pill-trabajo {
+  background-color: #e8f0fe;
+  color: #1967d2;
+}
+.pill-personal {
+  background-color: #e6f4ea;
+  color: #137333;
+}
+.pill-urgente {
+  background-color: #fce8e6;
+  color: #c5221f;
+}
+.pill-ideas {
+  background-color: #fef7e0;
+  color: #b06000;
+}
+.pill-general {
+  background-color: #f1f3f4;
+  color: #5f6368;
+}
+
+[data-theme="dark"] .pill-trabajo {
+  background-color: #1c3b69;
+  color: #8ab4f8;
+}
+[data-theme="dark"] .pill-personal {
+  background-color: #1b3d2b;
+  color: #81c995;
+}
+[data-theme="dark"] .pill-urgente {
+  background-color: #4a1d1b;
+  color: #f28b82;
+}
+[data-theme="dark"] .pill-ideas {
+  background-color: #3e2d14;
+  color: #fdd663;
+}
+[data-theme="dark"] .pill-general {
+  background-color: #2d2f34;
+  color: #bdc1c6;
+}
+
+/* Responsive layout (sidebar drawer, compose modal, header) */
+.sidebar-backdrop {
+  display: none;
+}
+
+.app-header-menu-btn {
+  display: none;
+}
+
+/* ---- Task row (TaskItem) ---- */
+.task-row-title {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 160px;
+  max-width: 300px;
+}
+
+/* Action buttons use a theme-aware hover (var(--gmail-hover)) instead of the
+   hardcoded light tints that showed up as bright patches in dark mode. */
+.task-action-btn {
+  padding: 6px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+}
+.task-action-btn:hover {
+  background-color: var(--gmail-hover);
+}
+
+@media (max-width: 860px) {
+  .app-header-optional {
+    display: none;
+  }
+
+  .app-header-menu-btn {
+    display: flex;
+  }
+
+  .app-brand {
+    min-width: 0 !important;
+  }
+
+  /* Kept below SettingsModal/EmailPreviewModal/UserMenu (z-index 200) and ProfileModal (250)
+     so the drawer never blocks them if it's left open while one of those is opened. */
+  .sidebar-backdrop.open {
+    display: block;
+    position: fixed;
+    top: 64px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 150;
+  }
+
+  .app-sidebar {
+    position: fixed;
+    top: 64px;
+    left: 0;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    z-index: 155;
+    box-shadow: 2px 0 16px rgba(0, 0, 0, 0.3);
+  }
+
+  .app-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .task-compose-modal {
+    width: 100% !important;
+    right: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    border-radius: 16px 16px 0 0 !important;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+
+  /* On phones the row can't fit description + fixed badges + 3 actions on one
+     48px line, so drop the description and let the title use the freed width. */
+  .task-row-desc {
+    display: none;
+  }
+  .task-row-title {
+    min-width: 0;
+    max-width: none;
+  }
+}

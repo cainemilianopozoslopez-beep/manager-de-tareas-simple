@@ -1,0 +1,10 @@
+{
+  "name": "gmail-task-manager-root",
+  "version": "1.0.0",
+  "scripts": {
+    "server": "node --disable-warning=ExperimentalWarning server/index.js",
+    "client": "npm --prefix client run dev",
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "test": "npm --prefix server test && npm --prefix client test"
+  }
+}
