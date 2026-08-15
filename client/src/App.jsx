@@ -12,9 +12,21 @@ import StatsDashboard from './components/StatsDashboard';
 import CalendarView from './components/CalendarView';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { getTodayStr, dateStrDaysFromToday, advanceRecurringTasks, filterTasks, filterByTab, filterByCategory, filterBySearch } from './taskUtils';
-import { subscribeUserTasks, addFirebaseTask, updateFirebaseTask, deleteFirebaseTask, logoutUser } from './firebase';
-
-const API_BASE = 'http://localhost:5000/api';
+import {
+  db,
+  subscribeAuth,
+  subscribeUserTasks,
+  addFirebaseTask,
+  saveTaskToTareasCollection,
+  updateFirebaseTask,
+  deleteFirebaseTask,
+  batchApplyFirebaseAction,
+  getUserSettings,
+  updateUserSettings,
+  exportUserBackup,
+  importUserBackup,
+  logoutUser
+} from './firebase';
 
 const BASE_CATEGORIES = ['trabajo', 'personal', 'urgente', 'ideas', 'general'];
 
@@ -57,7 +69,15 @@ export default function App() {
     const savedSession = sessionStorage.getItem('gmail_task_guest_user');
     if (savedSession) return JSON.parse(savedSession);
     const savedLocal = localStorage.getItem('gmail_task_user');
-    return savedLocal ? JSON.parse(savedLocal) : null;
+    if (!savedLocal) return null;
+    const parsed = JSON.parse(savedLocal);
+    // Accounts cached before the Firebase migration have no uid — no longer valid,
+    // since every registered user must now come from Firebase Auth.
+    if (!parsed.isGuest && !parsed.uid) {
+      localStorage.removeItem('gmail_task_user');
+      return null;
+    }
+    return parsed;
   });
 
   // Local Tasks State (Stored persistently in localStorage)
@@ -83,7 +103,10 @@ export default function App() {
   // value, so we don't fire a server round-trip per character.
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(false);
-  const [sending, setSending] = useState(false);
+  // No async send-in-progress state needed while email sending is deferred (see
+  // handleSendEmailNow) — kept as a prop so EmailPreviewModal's button still works
+  // once that feature ships.
+  const [sending] = useState(false);
   const [toast, setToast] = useState(null);
 
   // Bulk selection: ids of tasks currently checked for a batch action.
@@ -134,6 +157,28 @@ export default function App() {
     return () => clearTimeout(t);
   }, [searchQuery]);
 
+  // Restore/sync the registered-user session from Firebase Auth itself (not just the
+  // localStorage cache) — this is what makes the login persist across reloads and
+  // devices. Never overrides an active guest session.
+  useEffect(() => {
+    const unsubscribe = subscribeAuth((firebaseUser) => {
+      if (!firebaseUser) return;
+      setUser(prev => {
+        if (prev?.isGuest) return prev;
+        const restored = {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          username: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+          isGuest: false,
+          theme: prev?.theme || 'light'
+        };
+        localStorage.setItem('gmail_task_user', JSON.stringify(restored));
+        return restored;
+      });
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Memoized so it's a stable dependency for the notification callbacks/effects below
   // (it only touches refs and setters, so it never needs to change identity).
   const showToast = useCallback((message, type = 'success', options = {}) => {
@@ -175,6 +220,7 @@ export default function App() {
       showToast('Modo Invitado finalizado. Datos borrados.');
     } else {
       localStorage.removeItem('gmail_task_user');
+      logoutUser().catch(err => console.error('Error al cerrar sesión en Firebase:', err));
       showToast('Sesión cerrada correctamente.');
     }
     setUser(null);
@@ -192,14 +238,12 @@ export default function App() {
         sessionStorage.setItem('gmail_task_guest_user', JSON.stringify(updatedUser));
       } else {
         localStorage.setItem('gmail_task_user', JSON.stringify(updatedUser));
-        try {
-          await fetch(`${API_BASE}/user/profile`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ theme: newTheme })
-          });
-        } catch (err) {
-          console.error('Error al guardar preferencia de tema:', err);
+        if (user.uid) {
+          try {
+            await updateUserSettings(user.uid, { theme: newTheme });
+          } catch (err) {
+            console.error('Error al guardar preferencia de tema:', err);
+          }
         }
       }
     }
@@ -320,36 +364,14 @@ export default function App() {
         search: debouncedSearch
       });
       setTasks(filtered);
-      return;
-    }
-
-    // Registered user fallback to local Express Server DB
-    setLoading(true);
-    try {
-      let url = `${API_BASE}/tasks?filter=${currentTab}`;
-      if (currentCategory) url += `&category=${encodeURIComponent(currentCategory)}`;
-      if (debouncedSearch) url += `&search=${encodeURIComponent(debouncedSearch)}`;
-
-      const [res, allRes] = await Promise.all([
-        fetch(url),
-        fetch(`${API_BASE}/tasks?filter=all`)
-      ]);
-      const [data, allData] = await Promise.all([res.json(), allRes.json()]);
-      setTasks(data);
-      setAllTasks(allData);
-    } catch (err) {
-      console.error('Error al cargar tareas:', err);
-    } finally {
-      setLoading(false);
     }
   }, [user, currentTab, currentCategory, debouncedSearch, guestTasks, allTasks]);
 
   // Fetch Settings
   const fetchSettings = useCallback(async () => {
-    if (!user || user.isGuest) return;
+    if (!user || user.isGuest || !user.uid) return;
     try {
-      const res = await fetch(`${API_BASE}/settings`);
-      const data = await res.json();
+      const data = await getUserSettings(user.uid);
       setSettings(data);
     } catch (err) {
       console.error('Error al cargar configuración:', err);
@@ -484,106 +506,57 @@ export default function App() {
       return;
     }
 
-    try {
-      const res = await fetch(`${API_BASE}/tasks/batch`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, action, value })
-      });
-      if (res.ok) {
+    if (user?.uid) {
+      try {
+        await batchApplyFirebaseAction(user.uid, ids, action, value);
         clearSelection();
         showToast(`Acción aplicada a ${ids.length} ${ids.length === 1 ? 'tarea' : 'tareas'}`);
-        fetchTasks();
-      } else {
+      } catch (err) {
+        console.error('Error en Firestore (acción en lote):', err);
         showToast('No se pudo aplicar la acción en lote', 'error');
       }
-    } catch (err) {
-      console.error('Error en acción en lote:', err);
-      showToast('Error al aplicar acción en lote', 'error');
     }
   };
 
-  // Create or Edit Task
+  // Create or Edit Task in Firestore collection 'tareas'
   const handleSaveTask = async (taskData) => {
-    if (user?.isGuest) {
+    try {
       if (taskData.id) {
+        // Update existing task in 'tareas' collection
+        await updateFirebaseTask(user?.username || 'user', taskData.id, taskData);
         setGuestTasks(prev => prev.map(t => t.id === taskData.id ? { ...t, ...taskData, updatedAt: new Date().toISOString() } : t));
-        showToast('Tarea temporal actualizada');
+        showToast('Tarea actualizada correctamente');
       } else {
-        const newTask = {
+        // Save new task directly into Firestore collection 'tareas'
+        const savedFirebaseTask = await saveTaskToTareasCollection({
           ...taskData,
-          id: 'guest-task-' + Date.now(),
+          username: user?.username || 'Caín',
+          starred: false,
+          done: false,
+          trash: false
+        }).catch(err => {
+          console.warn('Fallback a almacenamiento local:', err);
+          return null;
+        });
+
+        const newTask = savedFirebaseTask || {
+          ...taskData,
+          id: 'task-' + Date.now(),
           starred: false,
           done: false,
           trash: false,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
+
         setGuestTasks(prev => [newTask, ...prev]);
         setCurrentTab('inbox');
         setCurrentCategory('');
         setSearchQuery('');
-        showToast('Nueva tarea temporal creada');
-      }
-      return;
-    }
-
-    if (user?.uid) {
-      try {
-        if (taskData.id) {
-          await updateFirebaseTask(user.uid, taskData.id, taskData);
-          showToast('Tarea actualizada correctamente');
-        } else {
-          await addFirebaseTask(user.uid, {
-            ...taskData,
-            starred: false,
-            done: false,
-            trash: false
-          });
-          showToast('Nueva tarea guardada en la nube');
-          setCurrentTab('inbox');
-          setCurrentCategory('');
-          setSearchQuery('');
-        }
-        return;
-      } catch (err) {
-        console.error('Error en Firestore:', err);
-      }
-    }
-
-    try {
-      if (taskData.id) {
-        const res = await fetch(`${API_BASE}/tasks/${taskData.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(taskData)
-        });
-        if (res.ok) {
-          showToast('Tarea actualizada correctamente');
-          fetchTasks();
-        } else {
-          const data = await res.json().catch(() => ({}));
-          showToast(data.error || 'No se pudo actualizar la tarea', 'error');
-        }
-      } else {
-        const res = await fetch(`${API_BASE}/tasks`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(taskData)
-        });
-        if (res.ok) {
-          showToast('Nueva tarea añadida a tus pendientes');
-          fetchTasks();
-          setCurrentTab('inbox');
-          setCurrentCategory('');
-          setSearchQuery('');
-        } else {
-          const data = await res.json().catch(() => ({}));
-          showToast(data.error || 'No se pudo crear la tarea', 'error');
-        }
+        showToast('Nueva tarea guardada en la colección tareas de Firestore');
       }
     } catch (err) {
-      console.error('Error al guardar la tarea:', err);
+      console.error('Error al guardar en Firestore:', err);
       showToast('Error al guardar la tarea', 'error');
     }
   };
@@ -604,28 +577,10 @@ export default function App() {
       try {
         await updateFirebaseTask(user.uid, id, { done: nextDone, subtasks: nextSubtasks });
         showToast(nextDone ? 'Tarea marcada como realizada' : 'Tarea reabierta como pendiente');
-        return;
       } catch (err) {
         console.error('Error en Firestore:', err);
+        showToast('Error al actualizar estado', 'error');
       }
-    }
-
-    try {
-      const res = await fetch(`${API_BASE}/tasks/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ done: nextDone, subtasks: nextSubtasks })
-      });
-      if (res.ok) {
-        showToast(nextDone ? 'Tarea marcada como realizada' : 'Tarea reabierta como pendiente');
-        fetchTasks();
-      } else {
-        showToast('No se pudo actualizar la tarea', 'error');
-        fetchTasks();
-      }
-    } catch (err) {
-      console.error('Error al actualizar estado de la tarea:', err);
-      showToast('Error al actualizar estado', 'error');
     }
   };
 
@@ -642,23 +597,10 @@ export default function App() {
         if (target) {
           await updateFirebaseTask(user.uid, id, { starred: !target.starred });
         }
-        return;
       } catch (err) {
         console.error('Error en Firestore:', err);
+        showToast('Error al destacar tarea', 'error');
       }
-    }
-
-    try {
-      const res = await fetch(`${API_BASE}/tasks/${id}/star`, { method: 'PATCH' });
-      if (res.ok) {
-        fetchTasks();
-      } else {
-        showToast('No se pudo destacar la tarea (puede que ya no exista, intenta refrescar)', 'error');
-        fetchTasks();
-      }
-    } catch (err) {
-      console.error('Error al destacar la tarea:', err);
-      showToast('Error al destacar tarea', 'error');
     }
   };
 
@@ -688,23 +630,10 @@ export default function App() {
             await deleteFirebaseTask(user.uid, id);
           }
         }
-        return;
       } catch (err) {
         console.error('Error en Firestore:', err);
+        showToast('Error al eliminar tarea', 'error');
       }
-    }
-
-    try {
-      const res = await fetch(`${API_BASE}/tasks/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        fetchTasks();
-      } else {
-        showToast('No se pudo eliminar la tarea (puede que ya no exista, intenta refrescar)', 'error');
-        fetchTasks();
-      }
-    } catch (err) {
-      console.error('Error al eliminar la tarea:', err);
-      showToast('Error al eliminar tarea', 'error');
     }
   };
 
@@ -756,16 +685,15 @@ export default function App() {
       return;
     }
 
-    try {
-      const res = await fetch(`${API_BASE}/tasks-trash/empty`, { method: 'DELETE' });
-      if (res.ok) {
-        fetchTasks();
-      } else {
+    if (user?.uid) {
+      const ids = allTasks.filter(t => t.trash).map(t => t.id);
+      if (ids.length === 0) return;
+      try {
+        await batchApplyFirebaseAction(user.uid, ids, 'delete');
+      } catch (err) {
+        console.error('Error en Firestore (vaciar papelera):', err);
         showToast('No se pudo vaciar la papelera', 'error');
       }
-    } catch (err) {
-      console.error('Error al vaciar la papelera:', err);
-      showToast('Error al vaciar papelera', 'error');
     }
   };
 
@@ -814,91 +742,78 @@ export default function App() {
       showToast('La configuración de notificaciones pertenece a la cuenta real, no está disponible en Modo Invitado', 'error');
       return;
     }
+    if (!user?.uid) return;
     try {
-      const res = await fetch(`${API_BASE}/settings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSettings)
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSettings(data.settings);
-        showToast('Configuración de alerta guardada correctamente');
-      } else {
-        showToast('No se pudo guardar la configuración', 'error');
-      }
+      const data = await updateUserSettings(user.uid, newSettings);
+      setSettings(data);
+      showToast('Configuración de alerta guardada correctamente');
     } catch (err) {
       console.error('Error al guardar la configuración:', err);
       showToast('Error al guardar configuración', 'error');
     }
   };
 
-  // Download a full backup (user, settings, tasks) of the real account's data
-  const handleExportBackup = () => {
+  // Download a full backup (settings + tasks) of the real account's data as a JSON
+  // file — built entirely client-side from Firestore, no server involved.
+  const handleExportBackup = async () => {
     if (user?.isGuest) {
       showToast('El respaldo pertenece a la cuenta real, no está disponible en Modo Invitado', 'error');
       return;
     }
-    window.open(`${API_BASE}/backup/export`, '_blank');
+    if (!user?.uid) return;
+    try {
+      const backup = await exportUserBackup(user.uid, user, settings);
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gmail-task-manager-backup-${getTodayStr()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast('Respaldo descargado correctamente');
+    } catch (err) {
+      console.error('Error al exportar el respaldo:', err);
+      showToast('No se pudo generar el respaldo', 'error');
+    }
   };
 
-  // Restore a previously exported backup file, replacing all current data
+  // Restore a previously exported backup file: upserts each task by id and merges
+  // the settings doc. Does not delete tasks missing from the file.
   const handleImportBackup = async (file) => {
     if (user?.isGuest) {
       showToast('El respaldo pertenece a la cuenta real, no está disponible en Modo Invitado', 'error');
       return;
     }
+    if (!user?.uid) return;
 
     const confirmed = window.confirm(
-      'Esto reemplazará TODAS tus tareas, ajustes y la cuenta actuales con lo que hay en el archivo. Esta acción no se puede deshacer. ¿Continuar?'
+      'Esto creará o actualizará tareas y ajustes a partir del archivo de respaldo. Esta acción no se puede deshacer. ¿Continuar?'
     );
     if (!confirmed) return;
 
     try {
       const text = await file.text();
       const parsed = JSON.parse(text);
-      const res = await fetch(`${API_BASE}/backup/import`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(parsed)
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showToast(`Respaldo restaurado: ${data.taskCount} tareas`, 'success');
-        fetchTasks();
-        fetchSettings();
-      } else {
-        showToast(data.error || 'No se pudo restaurar el respaldo', 'error');
-      }
+      const count = await importUserBackup(user.uid, parsed);
+      showToast(`Respaldo restaurado: ${count} tareas`, 'success');
+      fetchSettings();
     } catch (err) {
       console.error('Error al restaurar el respaldo:', err);
       showToast('El archivo no es un respaldo JSON válido', 'error');
     }
   };
 
-  // Send Email Summary
+  // Send Email Summary — email sending needs a server that can hold the Gmail
+  // credentials safely, which the cloud version doesn't have yet (planned as a
+  // follow-up serverless function). Browser notifications keep working meanwhile.
   const handleSendEmailNow = async () => {
     if (user?.isGuest) {
-      showToast('El envío de correo usa la cuenta y las tareas reales del servidor, no está disponible en Modo Invitado', 'error');
+      showToast('El envío de correo usa la cuenta real, no está disponible en Modo Invitado', 'error');
       return;
     }
-    setSending(true);
-    try {
-      const res = await fetch(`${API_BASE}/send-summary`, { method: 'POST' });
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        showToast('✉️ ' + data.message, 'success');
-      } else {
-        showToast('❌ ' + (data.error || 'No se pudo enviar el correo'), 'error');
-      }
-      fetchSettings();
-    } catch (err) {
-      console.error('Error de conexión al enviar correo:', err);
-      showToast('❌ Error de conexión al enviar correo', 'error');
-    } finally {
-      setSending(false);
-    }
+    showToast('✉️ El envío automático de correo todavía no está disponible en la versión web. Mientras tanto, usá las notificaciones del navegador.', 'error');
   };
 
   const handleMoveToQuadrant = async (taskId, targetQuadrant) => {
@@ -924,26 +839,10 @@ export default function App() {
       try {
         await updateFirebaseTask(user.uid, taskId, updates);
         showToast('Tarea movida de cuadrante', 'success');
-        return;
       } catch (err) {
         console.error('Error en Firestore:', err);
-      }
-    }
-
-    try {
-      const res = await fetch(`${API_BASE}/tasks/${taskId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-      });
-      if (res.ok) {
-        fetchTasks();
-        showToast('Tarea movida de cuadrante', 'success');
-      } else {
         showToast('Error al mover tarea', 'error');
       }
-    } catch (err) {
-      showToast('Error de conexión', 'error');
     }
   };
 
@@ -974,25 +873,10 @@ export default function App() {
     if (user?.uid) {
       try {
         await updateFirebaseTask(user.uid, taskId, updates);
-        return;
       } catch (err) {
         console.error('Error en Firestore:', err);
-      }
-    }
-
-    try {
-      const res = await fetch(`${API_BASE}/tasks/${taskId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-      });
-      if (res.ok) {
-        fetchTasks();
-      } else {
         showToast('Error al actualizar paso', 'error');
       }
-    } catch (err) {
-      showToast('Error de conexión', 'error');
     }
   };
 
@@ -1213,6 +1097,8 @@ export default function App() {
         onClose={() => setIsPreviewOpen(false)}
         onSendNow={handleSendEmailNow}
         sending={sending}
+        pendingTasks={visibleAllTasks.filter(t => !t.done && !t.trash)}
+        scheduledTime={settings?.scheduledTime}
       />
 
       {/* Account / Profile Modal */}

@@ -1,69 +1,63 @@
 import React, { useState } from 'react';
-import { Lock, User, AlertCircle, ArrowRight, UserCheck } from 'lucide-react';
-import { loginWithEmail, registerWithEmail } from '../firebase';
+import { Lock, Mail, UserCircle, AlertCircle, ArrowRight, UserCheck } from 'lucide-react';
+import { loginWithEmail, registerWithEmail, updateUserDisplayName, translateFirebaseError, isFirebaseConfigured } from '../firebase';
 
 export default function Login({ onLoginSuccess, onGuestLogin }) {
-  const [emailOrUser, setEmailOrUser] = useState('');
+  const [email, setEmail] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const getStoredAccounts = () => {
-    try {
-      const data = localStorage.getItem('gmail_task_accounts');
-      if (data) return JSON.parse(data);
-    } catch (e) {}
-    const defaultAccs = {
-      'caín': { username: 'Caín', password: '123' },
-      'cain': { username: 'Caín', password: '123' }
-    };
-    localStorage.setItem('gmail_task_accounts', JSON.stringify(defaultAccs));
-    return defaultAccs;
-  };
+  const buildUserData = (firebaseUser, fallbackName) => ({
+    uid: firebaseUser.uid,
+    email: firebaseUser.email,
+    username: firebaseUser.displayName || fallbackName || firebaseUser.email.split('@')[0],
+    isGuest: false,
+    theme: 'light'
+  });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
-    const inputVal = emailOrUser.trim();
+    const emailVal = email.trim();
     const passVal = password.trim();
+    const nameVal = displayName.trim();
 
-    if (!inputVal) {
-      setError('Por favor ingresa tu nombre de cuenta o usuario.');
+    if (!emailVal) {
+      setError('Por favor ingresa tu correo electrónico.');
       return;
     }
-
     if (!passVal) {
       setError('Por favor ingresa tu contraseña.');
       return;
     }
+    if (isRegistering && !nameVal) {
+      setError('Por favor ingresa tu nombre.');
+      return;
+    }
+    if (!isFirebaseConfigured) {
+      setError('Firebase todavía no está configurado en esta app. Avisale a quien la administra.');
+      return;
+    }
 
-    const accounts = getStoredAccounts();
-    const accountKey = inputVal.toLowerCase();
-
-    if (isRegistering) {
-      if (accounts[accountKey]) {
-        setError(`La cuenta "${inputVal}" ya existe. Intenta iniciar sesión.`);
-        return;
+    setLoading(true);
+    try {
+      if (isRegistering) {
+        const cred = await registerWithEmail(emailVal, passVal);
+        await updateUserDisplayName(nameVal);
+        onLoginSuccess(buildUserData(cred.user, nameVal));
+      } else {
+        const cred = await loginWithEmail(emailVal, passVal);
+        onLoginSuccess(buildUserData(cred.user));
       }
-      // Register new local account
-      accounts[accountKey] = { username: inputVal, password: passVal };
-      localStorage.setItem('gmail_task_accounts', JSON.stringify(accounts));
-      onLoginSuccess({ username: inputVal, isGuest: false, theme: 'light' });
-    } else {
-      // Validate credentials
-      const existingAccount = accounts[accountKey];
-      if (!existingAccount) {
-        setError(`La cuenta "${inputVal}" no existe. Haz clic en "¿No tienes cuenta? Registrate" para crearla.`);
-        return;
-      }
-      if (existingAccount.password !== passVal) {
-        setError('Contraseña incorrecta. Por favor verifica tus datos.');
-        return;
-      }
-
-      onLoginSuccess({ username: existingAccount.username, isGuest: false, theme: 'light' });
+    } catch (err) {
+      console.error('Error de autenticación:', err);
+      setError(translateFirebaseError(err));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -89,7 +83,7 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
         flexDirection: 'column',
         alignItems: 'center'
       }} className="animate-fade-in">
-        
+
         {/* Google / Gmail Branding Icon */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
           <svg width="42" height="42" viewBox="0 0 32 32" fill="none">
@@ -104,10 +98,10 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
         </div>
 
         <h1 style={{ fontSize: '22px', fontWeight: '500', color: 'var(--gmail-text-primary)', marginBottom: '8px', textAlign: 'center' }}>
-          Iniciar Sesión
+          {isRegistering ? 'Crear Cuenta' : 'Iniciar Sesión'}
         </h1>
         <p style={{ fontSize: '14px', color: 'var(--gmail-text-secondary)', marginBottom: '24px', textAlign: 'center' }}>
-          Ingresa con tu cuenta o entra en Modo Invitado temporal
+          Tu cuenta se guarda en la nube: entrá desde cualquier dispositivo
         </p>
 
         {/* Error Alert */}
@@ -133,19 +127,48 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
 
         {/* Login Form */}
         <form onSubmit={handleSubmit} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          
-          {/* Account Username or Email */}
+
+          {/* Display name — only when registering */}
+          {isRegistering && (
+            <div>
+              <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '6px' }}>
+                Tu Nombre:
+              </label>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <UserCircle size={18} color="var(--gmail-text-muted)" style={{ position: 'absolute', left: '14px' }} />
+                <input
+                  type="text"
+                  placeholder="Ej: Caín"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px 12px 42px',
+                    borderRadius: '12px',
+                    border: '1px solid var(--gmail-border)',
+                    backgroundColor: 'var(--gmail-bg)',
+                    color: 'var(--gmail-text-primary)',
+                    fontSize: '15px',
+                    fontWeight: '500'
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Email */}
           <div>
             <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '6px' }}>
-              Nombre de Cuenta / Correo:
+              Correo Electrónico:
             </label>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              <User size={18} color="var(--gmail-text-muted)" style={{ position: 'absolute', left: '14px' }} />
+              <Mail size={18} color="var(--gmail-text-muted)" style={{ position: 'absolute', left: '14px' }} />
               <input
-                type="text"
-                placeholder="Ej: Caín o cain@gmail.com"
-                value={emailOrUser}
-                onChange={(e) => setEmailOrUser(e.target.value)}
+                type="email"
+                placeholder="tu@correo.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 style={{
                   width: '100%',
@@ -174,6 +197,7 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                minLength={6}
                 style={{
                   width: '100%',
                   padding: '12px 14px 12px 42px',
@@ -186,6 +210,11 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
                 }}
               />
             </div>
+            {isRegistering && (
+              <p style={{ fontSize: '11.5px', color: 'var(--gmail-text-muted)', margin: '6px 0 0' }}>
+                Mínimo 6 caracteres.
+              </p>
+            )}
           </div>
 
           {/* Toggle Register Mode */}

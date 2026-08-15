@@ -1,15 +1,26 @@
-import React, { useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { X, Send } from 'lucide-react';
 import { useModalA11y } from '../useModalA11y';
+import { generateTaskEmailHTML } from '../emailTemplate';
 
 export default function EmailPreviewModal({
   isOpen,
   onClose,
   onSendNow,
-  sending
+  sending,
+  pendingTasks = [],
+  scheduledTime = '08:00'
 }) {
   const dialogRef = useRef(null);
   useModalA11y(isOpen, onClose, dialogRef);
+
+  // Built entirely client-side from the tasks already loaded in the app — no
+  // network call, so this stays accurate whether tasks live in Firestore or in a
+  // guest's local session.
+  const previewHtml = useMemo(
+    () => generateTaskEmailHTML(pendingTasks, scheduledTime),
+    [pendingTasks, scheduledTime]
+  );
 
   if (!isOpen) return null;
 
@@ -98,7 +109,7 @@ export default function EmailPreviewModal({
         {/* Iframe Preview Container */}
         <div style={{ flex: 1, backgroundColor: '#f6f8fc', padding: '16px', minHeight: '450px' }}>
           <iframe
-            src="http://localhost:5000/api/email-preview"
+            srcDoc={previewHtml}
             title="Email Preview"
             style={{
               width: '100%',

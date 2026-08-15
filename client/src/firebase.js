@@ -3,14 +3,8 @@ import {
   getAuth,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signInWithPopup,
-  GoogleAuthProvider,
   signOut,
-  onAuthStateChanged,
-  updateProfile,
-  updatePassword,
-  EmailAuthProvider,
-  reauthenticateWithCredential
+  onAuthStateChanged
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -22,7 +16,6 @@ import {
   getDoc,
   getDocs,
   setDoc,
-  writeBatch,
   onSnapshot,
   query,
   orderBy
@@ -30,7 +23,7 @@ import {
 
 // Firebase Configuration from Google Console
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyAf6WELD32a_QxLgwjZ__6sRf032B-lNJI",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyAf6WELd32a_QxLGwjZ__6sRf032B-lNJI",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "manager-de-tareas.firebaseapp.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "manager-de-tareas",
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "manager-de-tareas.firebasestorage.app",
@@ -38,22 +31,15 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:244336389802:web:1ddcbf42feda027a2eead3"
 };
 
-// Check if valid Firebase config exists
+// Initialize Firebase App & Firestore Database
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
 export const isFirebaseConfigured = true;
 
-let app = null;
-let auth = null;
-let db = null;
-
-try {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-} catch (err) {
-  console.warn('Firebase initialization notice:', err.message);
-}
-
-export { app, auth, db };
+// Export Firebase instance and Firestore
+export { app, auth, db, getFirestore };
 
 // ---- Error messages -------------------------------------------------------
 // Firebase Auth throws errors with a `.code` like 'auth/wrong-password'.
@@ -98,7 +84,7 @@ export const logoutUser = () => {
 };
 
 export const subscribeAuth = (callback) => {
-  if (!auth) return () => {};
+  if (!auth) return () => { };
   return onAuthStateChanged(auth, callback);
 };
 
@@ -117,11 +103,11 @@ export const changeUserPassword = async (currentPassword, newPassword) => {
   await updatePassword(auth.currentUser, newPassword);
 };
 
-// ---- Firestore: tasks ---------------------------------------------------
+// ---- Firestore: tareas collection ------------------------------------------
 export const subscribeUserTasks = (userId, callback) => {
-  if (!db || !userId) return () => {};
-  const tasksRef = collection(db, 'users', userId, 'tasks');
-  const q = query(tasksRef, orderBy('createdAt', 'desc'));
+  if (!db) return () => {};
+  const tareasRef = collection(db, 'tareas');
+  const q = query(tareasRef, orderBy('createdAt', 'desc'));
 
   return onSnapshot(q, (snapshot) => {
     const tasks = snapshot.docs.map(doc => ({
@@ -135,22 +121,26 @@ export const subscribeUserTasks = (userId, callback) => {
   });
 };
 
-export const addFirebaseTask = async (userId, taskData) => {
-  if (!db || !userId) throw new Error('Firestore no está configurado');
-  const tasksRef = collection(db, 'users', userId, 'tasks');
+export const saveTaskToTareasCollection = async (taskData) => {
+  if (!db) throw new Error('Firestore no está configurado');
+  const tareasRef = collection(db, 'tareas');
   const docData = {
     ...taskData,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
-  delete docData.id; // ensure no client id collision
-  const docRef = await addDoc(tasksRef, docData);
+  delete docData.id;
+  const docRef = await addDoc(tareasRef, docData);
   return { id: docRef.id, ...docData };
 };
 
+export const addFirebaseTask = async (userId, taskData) => {
+  return saveTaskToTareasCollection({ ...taskData, userId });
+};
+
 export const updateFirebaseTask = async (userId, taskId, updates) => {
-  if (!db || !userId || !taskId) throw new Error('Firestore no está configurado');
-  const taskRef = doc(db, 'users', userId, 'tasks', taskId);
+  if (!db || !taskId) throw new Error('Firestore no está configurado');
+  const taskRef = doc(db, 'tareas', taskId);
   await updateDoc(taskRef, {
     ...updates,
     updatedAt: new Date().toISOString()
@@ -158,8 +148,8 @@ export const updateFirebaseTask = async (userId, taskId, updates) => {
 };
 
 export const deleteFirebaseTask = async (userId, taskId) => {
-  if (!db || !userId || !taskId) throw new Error('Firestore no está configurado');
-  const taskRef = doc(db, 'users', userId, 'tasks', taskId);
+  if (!db || !taskId) throw new Error('Firestore no está configurado');
+  const taskRef = doc(db, 'tareas', taskId);
   await deleteDoc(taskRef);
 };
 

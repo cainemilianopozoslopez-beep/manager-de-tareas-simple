@@ -1,0 +1,210 @@
+========================================================================
+GMAIL TASK MANAGER — RESUMEN PARA DESARROLLADOR
+Objetivo: convertirlo de app local a app web real, multiusuario, desplegada
+Actualizado: ya migrado a Firebase en el código, falta el proyecto real
+========================================================================
+
+
+1. QUÉ ES
+------------------------------------------------------------------------
+Un gestor de tareas personales con estética Gmail (en el código está
+renombrado como "Pulse Matrix" — es el mismo proyecto). Era una app
+full-stack que funcionaba SOLO EN LOCAL. Ya se migró el código a
+Firebase (Auth + Firestore); SOLO FALTA crear el proyecto real de
+Firebase y conectar sus claves para que quede funcionando en internet.
+
+Es un proyecto chico, autocontenido, sin dependencias de pago ni build
+nativo.
+
+
+2. STACK TÉCNICO
+------------------------------------------------------------------------
+CLIENTE (client/) — ACTIVO, es lo único que se usa ahora
+  - React 19 + Vite 8
+  - Sin router ni librería de estado: TODO el estado vive en App.jsx
+    (~1000 líneas, useState/useEffect, props hacia abajo)
+  - Estilos inline (style={{}}), iconos con lucide-react
+  - Es una PWA (service worker propio en public/sw.js, manifest, íconos)
+  - firebase 12 instalado y CONECTADO: Auth (email/contraseña) +
+    Firestore (tareas, ajustes, respaldo)
+  - vercel.json listo (config de despliegue SPA)
+  - 15 componentes: TaskList, TaskItem, TaskModal, Login, SettingsModal,
+    ProfileModal, EmailPreviewModal, CalendarView, StatsDashboard,
+    MatrixView, PulseHeader, PulseSidebar, etc.
+
+SERVIDOR (server/) — YA NO SE USA, queda como código legacy
+  - Express 5 + SQLite (node:sqlite), nodemailer + node-cron
+  - Ningún archivo del cliente le pega más (se quitó todo localhost:5000)
+  - Se puede borrar sin romper nada, o dejarlo como referencia para el
+    envío de emails (ver punto 10)
+
+No hay monorepo: son dos carpetas vecinas coordinadas por scripts en el
+package.json raíz.
+
+
+3. MODELO DE DATOS (ahora en Firestore, por usuario)
+------------------------------------------------------------------------
+Estructura: users/{uid}/tasks/{taskId} y users/{uid}/settings/main
+
+TAREA: id, title, description, priority (urgente/alta/media/baja),
+  category, dueDate, dueTime, recurrence (none/daily/weekly/monthly),
+  subtasks (array {id, text, done}), starred, done, trash, timestamps.
+
+SETTINGS: theme, notificationMode (browser/gmail/both), senderEmail,
+  senderPass (app-password de Gmail, en pausa — ver punto 4),
+  recipientEmail, scheduledTime, autoSendEnabled, lastSentAt/Status.
+
+
+4. FUNCIONALIDADES
+------------------------------------------------------------------------
+  - CRUD de tareas con subtareas (barra de progreso), prioridad,
+    categorías, recurrencia (se auto-adelantan las vencidas)
+  - Vistas inteligentes: bandeja/pendientes, destacadas, programadas, hoy,
+    esta semana, vencidas, completadas, papelera
+  - Selección múltiple con acciones en lote (completar, papelera,
+    restaurar, categorizar…) -> ahora vía Firestore batch write
+  - Dashboard de estadísticas y vista de calendario mensual
+  - Búsqueda con debounce
+  - Atajos de teclado (componer, buscar, saltar entre vistas)
+  - Modo claro/oscuro (persistido en Firestore por usuario)
+  - Notificaciones del navegador: FUNCIONAN normal en cualquier lado
+  - Envío automático de EMAIL: EN PAUSA a propósito (ver punto 10) — la
+    vista previa del correo se sigue generando en el cliente y se ve
+    igual, pero el botón "Enviar por Gmail Ahora" avisa que todavía no
+    está disponible
+  - Backup export/import: ahora es un archivo JSON que se genera y lee
+    100% en el navegador (sin servidor), leyendo/escribiendo Firestore
+  - Modo invitado (sin cuenta, no persiste) sigue igual
+
+
+5. API DEL SERVIDOR EXPRESS (server/) — DEPRECADA, ya no se usa
+------------------------------------------------------------------------
+  Se deja documentada solo por si se reaprovecha server/mailer.js para
+  el envío de emails (punto 10). El cliente ya no llama a NINGUNO de
+  estos endpoints:
+
+  POST/GET/PUT/PATCH/DELETE /api/auth/login, /api/user/profile,
+  /api/tasks*, /api/settings, /api/send-summary, /api/email-preview,
+  /api/backup/export|import
+
+
+========================================================================
+6. EL ESTADO REAL — QUÉ SE HIZO Y QUÉ FALTA
+========================================================================
+Antes el proyecto tenía TRES caminos de datos a medias (Firestore
+inactivo, Express solo local, invitado). Eso YA SE ARREGLÓ en el código:
+
+  [1] FIRESTORE (nube) -> AHORA ES EL ÚNICO CAMINO PARA CUENTAS REALES
+      Login.jsx llama de verdad a Firebase Auth (email/contraseña), el
+      usuario recibe un uid real, y TODO (tareas, ajustes, lote,
+      respaldo, perfil) pasa por Firestore. Se sacaron los 12 lugares
+      que apuntaban a localhost:5000.
+
+  [2] EXPRESS + SQLITE -> RETIRADO del flujo del cliente
+      El código sigue en server/ pero nada lo llama. Puede borrarse.
+
+  [3] INVITADO (guest) -> SIGUE IGUAL
+      En memoria + sessionStorage, no persiste. Sin cambios.
+
+LO QUE FALTA (y es TODO lo que falta) es un solo paso externo:
+CREAR EL PROYECTO REAL DE FIREBASE. Ahora mismo el código usa una
+config de Firebase "dummy" (claves de relleno) porque no existe un
+archivo .env con las claves reales — ver punto 10 para los pasos
+exactos.
+
+
+7. QUÉ YA NO BLOQUEA PRODUCCIÓN (resuelto en esta pasada)
+------------------------------------------------------------------------
+  [RESUELTO] El login ya no es "falso cloud": usa Firebase Auth real
+    (loginWithEmail/registerWithEmail), con traducción de errores al
+    español. Ya NO existen las cuentas de localStorage (caín/123).
+
+  [RESUELTO] Cero referencias a localhost:5000 en todo client/src.
+
+  [RESUELTO] Acciones en lote, ajustes, tema, perfil (nombre y
+    contraseña vía Firebase updateProfile/updatePassword) y respaldo
+    export/import: todo corre contra Firestore o 100% en el navegador.
+
+  [PENDIENTE - externo] Firebase sin un proyecto real todavía: falta
+    crear el proyecto en la consola de Firebase, activar Auth
+    (email/contraseña) y Firestore, y cargar las 6 claves en un
+    archivo .env (ya existe client/.env.example con la plantilla).
+
+  [PENDIENTE - externo] Publicar las reglas de seguridad: el archivo
+    firestore.rules YA ESTÁ ESCRITO en la raíz del repo, solo falta
+    pegarlo en la consola de Firebase (Firestore > Reglas > Publicar).
+
+  [EN PAUSA, a propósito] Emails automáticos: necesitan un servidor que
+    guarde la contraseña de Gmail de forma segura (una función
+    serverless). No se puede hacer solo en el cliente sin exponer esa
+    contraseña. Se deja como fase 2 (ver punto 10). Mientras tanto las
+    notificaciones del navegador cubren el mismo caso de uso.
+
+
+8. QUÉ YA ESTÁ BIEN
+------------------------------------------------------------------------
+  - taskUtils.js: filtros, recurrencia y prioridad en un módulo PURO y
+    CON TESTS. Sin cambios, se sigue usando igual.
+  - firebase.js: ahora completo — Auth, CRUD de tareas, acciones en
+    lote, ajustes por usuario, export/import de respaldo, cambio de
+    perfil/contraseña, y traducción de errores al español.
+  - emailTemplate.js (nuevo): genera la vista previa del correo 100%
+    en el cliente, sin depender de ningún servidor.
+  - Build (npm run build) y los 9 tests (npm run test) pasan limpio
+    tras el cambio.
+
+
+9. HIGIENE DEL REPOSITORIO (a limpiar antes de subir a producción/open source)
+------------------------------------------------------------------------
+  - server/node_modules/ (665 archivos) y la base de datos real
+    (data.db, data.json) siguen COMMITEADOS EN GIT — incluye tareas
+    personales y el hash scrypt de la contraseña 123 (el sistema de
+    login que las usaba ya no existe, pero el archivo sigue en el
+    historial de git).
+  - No hay LICENSE ni .gitignore en la raíz; el README es el default de
+    Vite.
+  - client/.gitignore ya excluye .env (las claves de Firebase reales
+    nunca se van a subir a git).
+  - BIEN: la app-password de Gmail NO quedó filtrada (campo vacío).
+
+
+========================================================================
+10. LO QUE NECESITO DEL EXPERTO (o para hacer yo mismo con guía)
+========================================================================
+Ya NO hace falta decidir arquitectura ni reescribir código de
+autenticación/datos — eso está hecho. Lo que queda es:
+
+PASO 1 — Crear el proyecto de Firebase (5-10 min, requiere cuenta Google):
+  1. console.firebase.google.com -> Crear un proyecto
+  2. Authentication -> Sign-in method -> activar "Correo/contraseña"
+  3. Firestore Database -> Crear base de datos -> modo producción
+  4. Configuración del proyecto -> Tus apps -> Agregar app Web ("</>")
+  5. Copiar las 6 claves (apiKey, authDomain, projectId, etc.) a
+     client/.env (usando client/.env.example como plantilla)
+  6. Pegar el contenido de firestore.rules en Firestore > Reglas ->
+     Publicar
+
+PASO 2 — Probar en local:
+  cd client && npm run dev
+  Registrar una cuenta real, crear tareas, confirmar que persisten.
+
+PASO 3 — Desplegar:
+  Cargar las mismas 6 variables VITE_FIREBASE_* como Environment
+  Variables del proyecto en Vercel, y volver a desplegar
+  (manager-de-tareas-simple.vercel.app ya existe y está conectado
+  al repo de GitHub).
+
+FASE 2 (opcional, más adelante) — Envío automático de emails:
+  Requiere una función serverless (Vercel Function o Firebase Cloud
+  Function) que guarde la contraseña de Gmail fuera del cliente y
+  dispare el envío. server/mailer.js ya tiene la lógica de generar el
+  HTML y mandar el correo con nodemailer — se puede portar casi tal
+  cual a esa función en vez de reescribirla de cero.
+
+
+EN UNA FRASE:
+  El código YA está migrado a Firebase; solo falta crear el proyecto
+  real, cargar sus claves, y volver a desplegar. El envío de emails
+  queda como una mejora aparte para más adelante.
+
+========================================================================

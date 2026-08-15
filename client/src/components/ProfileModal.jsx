@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Save, User, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useModalA11y } from '../useModalA11y';
+import { updateUserDisplayName, changeUserPassword, translateFirebaseError } from '../firebase';
 
 export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile }) {
   const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [saving, setSaving] = useState(false);
@@ -13,8 +15,9 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile })
 
   useEffect(() => {
     if (user) {
-      setUsername(user.username || 'Caín');
-      setPassword('');
+      setUsername(user.username || '');
+      setCurrentPassword('');
+      setNewPassword('');
     }
   }, [user, isOpen]);
 
@@ -25,38 +28,41 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile })
     setSuccessMsg('');
     setErrorMsg('');
 
-    if (!username.trim()) {
+    const nameVal = username.trim();
+    const newPassVal = newPassword.trim();
+    const currentPassVal = currentPassword.trim();
+
+    if (!nameVal) {
       setErrorMsg('El nombre de usuario no puede estar vacío');
+      return;
+    }
+    if (newPassVal && !currentPassVal) {
+      setErrorMsg('Para cambiar la contraseña, ingresá primero tu contraseña actual');
+      return;
+    }
+    if (newPassVal && newPassVal.length < 6) {
+      setErrorMsg('La nueva contraseña debe tener al menos 6 caracteres');
       return;
     }
 
     setSaving(true);
     try {
-      const payload = { username: username.trim() };
-      if (password.trim()) {
-        payload.password = password.trim();
+      if (nameVal !== user?.username) {
+        await updateUserDisplayName(nameVal);
+      }
+      if (newPassVal) {
+        await changeUserPassword(currentPassVal, newPassVal);
       }
 
-      const res = await fetch('http://localhost:5000/api/user/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        setSuccessMsg('Perfil y credenciales actualizados correctamente');
-        onUpdateProfile(data.user);
-        setTimeout(() => {
-          setSuccessMsg('');
-          onClose();
-        }, 1500);
-      } else {
-        setErrorMsg(data.error || 'Error al actualizar perfil');
-      }
+      setSuccessMsg('Perfil actualizado correctamente');
+      onUpdateProfile({ username: nameVal });
+      setTimeout(() => {
+        setSuccessMsg('');
+        onClose();
+      }, 1500);
     } catch (err) {
-      console.error('Error de conexión al actualizar perfil:', err);
-      setErrorMsg('Error de conexión con el servidor');
+      console.error('Error al actualizar perfil:', err);
+      setErrorMsg(translateFirebaseError(err));
     } finally {
       setSaving(false);
     }
@@ -90,7 +96,7 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile })
         overflow: 'hidden',
         border: '1px solid var(--gmail-border)'
       }} className="animate-fade-in">
-        
+
         {/* Header */}
         <div style={{
           backgroundColor: 'var(--gmail-blue)',
@@ -127,6 +133,25 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile })
             </div>
           )}
 
+          {/* Email (read-only — tied to the account, not editable here) */}
+          {user?.email && (
+            <div>
+              <label style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '6px' }}>
+                Correo:
+              </label>
+              <div style={{
+                padding: '10px 14px',
+                borderRadius: '10px',
+                border: '1px solid var(--gmail-border)',
+                backgroundColor: 'var(--gmail-hover)',
+                color: 'var(--gmail-text-secondary)',
+                fontSize: '14px'
+              }}>
+                {user.email}
+              </div>
+            </div>
+          )}
+
           {/* Username Input */}
           <div>
             <label style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '6px' }}>
@@ -149,7 +174,7 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile })
             />
           </div>
 
-          {/* Password Input */}
+          {/* New Password Input */}
           <div>
             <label style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '4px' }}>
               Nueva Contraseña (deja en blanco para mantener la actual):
@@ -157,8 +182,8 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile })
             <input
               type="password"
               placeholder="Nueva contraseña..."
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
               style={{
                 width: '100%',
                 padding: '10px 14px',
@@ -170,6 +195,30 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile })
               }}
             />
           </div>
+
+          {/* Current Password Input — only needed to confirm a password change */}
+          {newPassword.trim() && (
+            <div>
+              <label style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '4px' }}>
+                Contraseña Actual (para confirmar el cambio):
+              </label>
+              <input
+                type="password"
+                placeholder="Tu contraseña actual..."
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--gmail-border)',
+                  backgroundColor: 'var(--gmail-bg)',
+                  color: 'var(--gmail-text-primary)',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+          )}
 
           {/* Buttons */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
