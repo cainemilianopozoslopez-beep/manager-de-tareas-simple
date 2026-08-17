@@ -125,7 +125,7 @@ export default function PulseHeader({
       </div>
 
       {/* Center: Search & Pulse Progress Ring */}
-      <div style={{ flex: 1, maxWidth: '440px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div style={{ flex: 1, maxWidth: '440px', display: 'flex', alignItems: 'center', gap: '16px' }} className="app-header-search-container">
         {/* Search Bar */}
         <div style={{
           position: 'relative',

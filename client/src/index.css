@@ -399,13 +399,14 @@ input, textarea, select {
     left: 0;
     right: 0;
     height: 64px;
-    backgroundColor: var(--pulse-surface);
+    background-color: var(--pulse-surface) !important;
     border-top: 1px solid var(--pulse-border);
     justify-content: space-around;
     align-items: center;
-    z-index: 120;
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+    z-index: 999 !important;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.12);
     padding: 0 8px;
+    backdrop-filter: blur(8px);
   }
 
   .mobile-nav-item {
@@ -444,7 +445,7 @@ input, textarea, select {
     font-weight: 600;
     font-size: 15px;
     box-shadow: 0 6px 20px rgba(234, 67, 53, 0.4);
-    z-index: 125;
+    z-index: 1000 !important;
     cursor: pointer;
     border: none;
     transition: transform 0.15s ease;
@@ -454,7 +455,16 @@ input, textarea, select {
     transform: scale(0.95);
   }
 
-  .app-main-content {
-    padding-bottom: 76px !important;
+  main, .app-main-content {
+    padding-bottom: 140px !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-header-search-container {
+    max-width: 140px !important;
+  }
+  .app-brand-subtitle {
+    display: none !important;
   }
 }
