@@ -17,7 +17,6 @@ import {
   subscribeAuth,
   subscribeUserTasks,
   addFirebaseTask,
-  saveTaskToTareasCollection,
   updateFirebaseTask,
   deleteFirebaseTask,
   batchApplyFirebaseAction,
@@ -518,28 +517,14 @@ export default function App() {
     }
   };
 
-  // Create or Edit Task in Firestore collection 'tareas'
+  // Create or Edit Task
   const handleSaveTask = async (taskData) => {
-    try {
+    if (user?.isGuest) {
       if (taskData.id) {
-        // Update existing task in 'tareas' collection
-        await updateFirebaseTask(user?.username || 'user', taskData.id, taskData);
         setGuestTasks(prev => prev.map(t => t.id === taskData.id ? { ...t, ...taskData, updatedAt: new Date().toISOString() } : t));
         showToast('Tarea actualizada correctamente');
       } else {
-        // Save new task directly into Firestore collection 'tareas'
-        const savedFirebaseTask = await saveTaskToTareasCollection({
-          ...taskData,
-          username: user?.username || 'Caín',
-          starred: false,
-          done: false,
-          trash: false
-        }).catch(err => {
-          console.warn('Fallback a almacenamiento local:', err);
-          return null;
-        });
-
-        const newTask = savedFirebaseTask || {
+        const newTask = {
           ...taskData,
           id: 'task-' + Date.now(),
           starred: false,
@@ -548,12 +533,31 @@ export default function App() {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
-
         setGuestTasks(prev => [newTask, ...prev]);
         setCurrentTab('inbox');
         setCurrentCategory('');
         setSearchQuery('');
-        showToast('Nueva tarea guardada en la colección tareas de Firestore');
+        showToast('Nueva tarea guardada');
+      }
+      return;
+    }
+
+    if (!user?.uid) return;
+    try {
+      if (taskData.id) {
+        await updateFirebaseTask(user.uid, taskData.id, taskData);
+        showToast('Tarea actualizada correctamente');
+      } else {
+        await addFirebaseTask(user.uid, {
+          ...taskData,
+          starred: false,
+          done: false,
+          trash: false
+        });
+        setCurrentTab('inbox');
+        setCurrentCategory('');
+        setSearchQuery('');
+        showToast('Nueva tarea guardada');
       }
     } catch (err) {
       console.error('Error al guardar en Firestore:', err);

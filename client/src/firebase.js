@@ -103,11 +103,13 @@ export const changeUserPassword = async (currentPassword, newPassword) => {
   await updatePassword(auth.currentUser, newPassword);
 };
 
-// ---- Firestore: tareas collection ------------------------------------------
+// ---- Firestore: tasks live per-user at users/{uid}/tasks/{taskId}, matching
+// firestore.rules (which only grants access under users/{request.auth.uid}) ----
+const userTasksRef = (userId) => collection(db, 'users', userId, 'tasks');
+
 export const subscribeUserTasks = (userId, callback) => {
   if (!db) return () => {};
-  const tareasRef = collection(db, 'tareas');
-  const q = query(tareasRef, orderBy('createdAt', 'desc'));
+  const q = query(userTasksRef(userId), orderBy('createdAt', 'desc'));
 
   return onSnapshot(q, (snapshot) => {
     const tasks = snapshot.docs.map(doc => ({
@@ -121,26 +123,22 @@ export const subscribeUserTasks = (userId, callback) => {
   });
 };
 
-export const saveTaskToTareasCollection = async (taskData) => {
+export const addFirebaseTask = async (userId, taskData) => {
   if (!db) throw new Error('Firestore no está configurado');
-  const tareasRef = collection(db, 'tareas');
   const docData = {
     ...taskData,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
   delete docData.id;
-  const docRef = await addDoc(tareasRef, docData);
+  delete docData.userId;
+  const docRef = await addDoc(userTasksRef(userId), docData);
   return { id: docRef.id, ...docData };
-};
-
-export const addFirebaseTask = async (userId, taskData) => {
-  return saveTaskToTareasCollection({ ...taskData, userId });
 };
 
 export const updateFirebaseTask = async (userId, taskId, updates) => {
   if (!db || !taskId) throw new Error('Firestore no está configurado');
-  const taskRef = doc(db, 'tareas', taskId);
+  const taskRef = doc(db, 'users', userId, 'tasks', taskId);
   await updateDoc(taskRef, {
     ...updates,
     updatedAt: new Date().toISOString()
@@ -149,7 +147,7 @@ export const updateFirebaseTask = async (userId, taskId, updates) => {
 
 export const deleteFirebaseTask = async (userId, taskId) => {
   if (!db || !taskId) throw new Error('Firestore no está configurado');
-  const taskRef = doc(db, 'tareas', taskId);
+  const taskRef = doc(db, 'users', userId, 'tasks', taskId);
   await deleteDoc(taskRef);
 };
 
@@ -159,7 +157,7 @@ export const batchApplyFirebaseAction = async (userId, ids, action, value) => {
   if (!db) throw new Error('Firestore no está configurado');
   const batch = writeBatch(db);
   ids.forEach(id => {
-    const ref = doc(db, 'tareas', id);
+    const ref = doc(db, 'users', userId, 'tasks', id);
     if (action === 'delete') {
       batch.delete(ref);
       return;
@@ -204,9 +202,8 @@ export const updateUserSettings = async (userId, updates) => {
 
 // ---- Backup export / import (client-side, no server involved) ----
 export const exportUserBackup = async (userId, userInfo, settings) => {
-  if (!db) throw new Error('Firestore no está configurado');
-  const tasksRef = collection(db, 'tareas');
-  const snap = await getDocs(tasksRef);
+  if (!db || !userId) throw new Error('Firestore no está configurado');
+  const snap = await getDocs(userTasksRef(userId));
   const tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   return {
     exportedAt: new Date().toISOString(),
@@ -219,14 +216,14 @@ export const exportUserBackup = async (userId, userInfo, settings) => {
 // Restores a previously exported backup: overwrites/creates each task by id and
 // merges the settings doc. Runs as one atomic batch.
 export const importUserBackup = async (userId, backup) => {
-  if (!db) throw new Error('Firestore no está configurado');
+  if (!db || !userId) throw new Error('Firestore no está configurado');
   const tasks = Array.isArray(backup?.tasks) ? backup.tasks : [];
   const batch = writeBatch(db);
   tasks.forEach(t => {
     const { id, ...rest } = t;
     const ref = id
-      ? doc(db, 'tareas', id)
-      : doc(collection(db, 'tareas'));
+      ? doc(db, 'users', userId, 'tasks', id)
+      : doc(userTasksRef(userId));
     batch.set(ref, { ...rest, updatedAt: new Date().toISOString() });
   });
   if (backup?.settings && userId) {
