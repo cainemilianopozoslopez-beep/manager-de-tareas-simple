@@ -379,3 +379,80 @@ input, textarea, select {
     max-width: none;
   }
 }
+
+/* Mobile Navigation Bar & Floating Action Button (Gmail-style UX) */
+.mobile-bottom-nav {
+  display: none;
+}
+
+.mobile-fab-btn {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    backgroundColor: var(--pulse-surface);
+    border-top: 1px solid var(--pulse-border);
+    justify-content: space-around;
+    align-items: center;
+    z-index: 120;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+    padding: 0 8px;
+  }
+
+  .mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    flex: 1;
+    height: 100%;
+    color: var(--pulse-text-muted);
+    font-size: 11px;
+    font-weight: 500;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+
+  .mobile-nav-item.active {
+    color: var(--pulse-accent);
+    font-weight: 700;
+  }
+
+  .mobile-fab-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: fixed;
+    bottom: 78px;
+    right: 18px;
+    background: linear-gradient(135deg, #ea4335 0%, #d93025 100%);
+    color: #ffffff;
+    padding: 14px 22px;
+    border-radius: 28px;
+    font-weight: 600;
+    font-size: 15px;
+    box-shadow: 0 6px 20px rgba(234, 67, 53, 0.4);
+    z-index: 125;
+    cursor: pointer;
+    border: none;
+    transition: transform 0.15s ease;
+  }
+
+  .mobile-fab-btn:active {
+    transform: scale(0.95);
+  }
+
+  .app-main-content {
+    padding-bottom: 76px !important;
+  }
+}

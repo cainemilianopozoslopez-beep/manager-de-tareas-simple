@@ -10,7 +10,7 @@ import Login from './components/Login';
 import ProfileModal from './components/ProfileModal';
 import StatsDashboard from './components/StatsDashboard';
 import CalendarView from './components/CalendarView';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Plus, LayoutGrid, List, Calendar, BarChart2 } from 'lucide-react';
 import { getTodayStr, dateStrDaysFromToday, advanceRecurringTasks, filterTasks, filterByTab, filterByCategory, filterBySearch } from './taskUtils';
 import {
   db,
@@ -1112,6 +1112,52 @@ export default function App() {
         user={user}
         onUpdateProfile={handleUpdateProfile}
       />
+
+      {/* Mobile Floating Action Button (Gmail-style FAB) */}
+      <button
+        onClick={() => {
+          setEditingTask(null);
+          setComposeDate(null);
+          setIsTaskModalOpen(true);
+        }}
+        className="mobile-fab-btn"
+        aria-label="Nueva Tarea"
+      >
+        <Plus size={20} />
+        <span>Tarea</span>
+      </button>
+
+      {/* Mobile Bottom Navigation Bar (Gmail-style bottom bar) */}
+      <nav className="mobile-bottom-nav" aria-label="Navegación móvil">
+        <button
+          onClick={() => setActiveView('matrix')}
+          className={`mobile-nav-item ${activeView === 'matrix' ? 'active' : ''}`}
+        >
+          <LayoutGrid size={20} />
+          <span>Matriz</span>
+        </button>
+        <button
+          onClick={() => setActiveView('list')}
+          className={`mobile-nav-item ${activeView === 'list' ? 'active' : ''}`}
+        >
+          <List size={20} />
+          <span>Lista</span>
+        </button>
+        <button
+          onClick={() => setActiveView('calendar')}
+          className={`mobile-nav-item ${activeView === 'calendar' ? 'active' : ''}`}
+        >
+          <Calendar size={20} />
+          <span>Agenda</span>
+        </button>
+        <button
+          onClick={() => setActiveView('stats')}
+          className={`mobile-nav-item ${activeView === 'stats' ? 'active' : ''}`}
+        >
+          <BarChart2 size={20} />
+          <span>Stats</span>
+        </button>
+      </nav>
 
     </div>
   );
