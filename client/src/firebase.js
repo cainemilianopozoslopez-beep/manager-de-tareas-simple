@@ -3,6 +3,7 @@ import {
   getAuth,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut,
   onAuthStateChanged
 } from 'firebase/auth';
@@ -69,6 +70,11 @@ export const loginWithEmail = (email, password) => {
 export const registerWithEmail = (email, password) => {
   if (!auth) return Promise.reject(new Error('Firebase no está configurado'));
   return createUserWithEmailAndPassword(auth, email, password);
+};
+
+export const resetUserPassword = (email) => {
+  if (!auth) return Promise.reject(new Error('Firebase no está configurado'));
+  return sendPasswordResetEmail(auth, email);
 };
 
 export const loginWithGoogle = () => {

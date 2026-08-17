@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Lock, Mail, UserCircle, AlertCircle, ArrowRight, UserCheck } from 'lucide-react';
-import { loginWithEmail, registerWithEmail, updateUserDisplayName, translateFirebaseError, isFirebaseConfigured } from '../firebase';
+import { loginWithEmail, registerWithEmail, resetUserPassword, updateUserDisplayName, translateFirebaseError, isFirebaseConfigured } from '../firebase';
 
 export default function Login({ onLoginSuccess, onGuestLogin }) {
   const [email, setEmail] = useState('');
@@ -8,6 +8,7 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState('');
+  const [resetMessage, setResetMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
   const buildUserData = (firebaseUser, fallbackName) => ({
@@ -58,6 +59,22 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
       setError(translateFirebaseError(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    setError('');
+    setResetMessage('');
+    const emailVal = email.trim();
+    if (!emailVal) {
+      setError('Por favor escribe tu correo arriba para enviarte las instrucciones.');
+      return;
+    }
+    try {
+      await resetUserPassword(emailVal);
+      setResetMessage('Te enviamos un correo para restablecer tu contraseña. Revisa tu bandeja de entrada.');
+    } catch (err) {
+      setError(translateFirebaseError(err));
     }
   };
 
@@ -122,6 +139,26 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
           }}>
             <AlertCircle size={18} />
             <span>{error}</span>
+          </div>
+        )}
+
+        {resetMessage && (
+          <div style={{
+            width: '100%',
+            backgroundColor: '#e6f4ea',
+            color: '#137333',
+            border: '1px solid #ceead6',
+            padding: '12px 16px',
+            borderRadius: '12px',
+            fontSize: '13px',
+            fontWeight: '500',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '20px'
+          }}>
+            <UserCheck size={18} />
+            <span>{resetMessage}</span>
           </div>
         )}
 
@@ -217,11 +254,20 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
             )}
           </div>
 
-          {/* Toggle Register Mode */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-4px' }}>
+          {/* Toggle Register Mode & Reset Password */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '-4px' }}>
+            {!isRegistering ? (
+              <button
+                type="button"
+                onClick={handleResetPassword}
+                style={{ fontSize: '12px', color: 'var(--gmail-text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            ) : <div />}
             <button
               type="button"
-              onClick={() => { setIsRegistering(!isRegistering); setError(''); }}
+              onClick={() => { setIsRegistering(!isRegistering); setError(''); setResetMessage(''); }}
               style={{ fontSize: '12.5px', color: 'var(--gmail-blue)', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer' }}
             >
               {isRegistering ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Registrate'}
