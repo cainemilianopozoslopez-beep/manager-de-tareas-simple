@@ -45,16 +45,15 @@ export { app, auth, db, getFirestore };
 // Firebase Auth throws errors with a `.code` like 'auth/wrong-password'.
 // This maps the codes we actually expect to user-facing Spanish text.
 const FIREBASE_ERROR_MESSAGES = {
-  'auth/email-already-in-use': 'Ese correo ya tiene una cuenta. Iniciá sesión en vez de registrarte.',
-  'auth/invalid-email': 'El correo no es válido.',
+  'auth/email-already-in-use': 'Ese correo ya está registrado. Intenta iniciar sesión.',
+  'auth/invalid-email': 'El correo electrónico no es válido.',
   'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
-  'auth/user-not-found': 'No existe una cuenta con ese correo.',
-  'auth/wrong-password': 'Contraseña incorrecta.',
-  'auth/invalid-credential': 'Correo o contraseña incorrectos.',
-  'auth/too-many-requests': 'Demasiados intentos. Esperá un momento y volvé a intentar.',
-  'auth/requires-recent-login': 'Por seguridad, tenés que volver a iniciar sesión antes de cambiar la contraseña.',
-  'auth/network-request-failed': 'Error de conexión. Revisá tu internet.',
-  'auth/configuration-not-found': 'Firebase todavía no está configurado en esta app (faltan las claves del proyecto).'
+  'auth/user-not-found': 'Ese correo aún no está registrado. Haz clic en "¿No tienes cuenta? Registrate".',
+  'auth/wrong-password': 'Contraseña incorrecta. Revisa tu contraseña o restablece tu acceso.',
+  'auth/invalid-credential': 'Correo o contraseña incorrectos. Si es tu primera vez, haz clic en "¿No tienes cuenta? Registrate".',
+  'auth/too-many-requests': 'Demasiados intentos fallidos. Espera un momento y vuelve a intentar.',
+  'auth/requires-recent-login': 'Por seguridad, debes volver a iniciar sesión.',
+  'auth/network-request-failed': 'Error de conexión. Revisa tu conexión a internet.'
 };
 
 export function translateFirebaseError(err) {
