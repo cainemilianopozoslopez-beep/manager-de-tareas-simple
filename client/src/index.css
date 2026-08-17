@@ -319,11 +319,13 @@ input, textarea, select {
   background-color: var(--gmail-hover);
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1080px) {
   .app-header-optional {
-    display: none;
+    display: none !important;
   }
+}
 
+@media (max-width: 860px) {
   .app-header-menu-btn {
     display: flex;
   }
