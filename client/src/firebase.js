@@ -156,10 +156,10 @@ export const deleteFirebaseTask = async (userId, taskId) => {
 // Applies one bulk action ('done'/'pending'/'trash'/'restore'/'category'/'delete') to
 // many task ids in a single atomic write — mirrors the server's PATCH /tasks/batch.
 export const batchApplyFirebaseAction = async (userId, ids, action, value) => {
-  if (!db || !userId) throw new Error('Firestore no está configurado');
+  if (!db) throw new Error('Firestore no está configurado');
   const batch = writeBatch(db);
   ids.forEach(id => {
-    const ref = doc(db, 'users', userId, 'tasks', id);
+    const ref = doc(db, 'tareas', id);
     if (action === 'delete') {
       batch.delete(ref);
       return;
@@ -204,8 +204,8 @@ export const updateUserSettings = async (userId, updates) => {
 
 // ---- Backup export / import (client-side, no server involved) ----
 export const exportUserBackup = async (userId, userInfo, settings) => {
-  if (!db || !userId) throw new Error('Firestore no está configurado');
-  const tasksRef = collection(db, 'users', userId, 'tasks');
+  if (!db) throw new Error('Firestore no está configurado');
+  const tasksRef = collection(db, 'tareas');
   const snap = await getDocs(tasksRef);
   const tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   return {
@@ -219,17 +219,17 @@ export const exportUserBackup = async (userId, userInfo, settings) => {
 // Restores a previously exported backup: overwrites/creates each task by id and
 // merges the settings doc. Runs as one atomic batch.
 export const importUserBackup = async (userId, backup) => {
-  if (!db || !userId) throw new Error('Firestore no está configurado');
+  if (!db) throw new Error('Firestore no está configurado');
   const tasks = Array.isArray(backup?.tasks) ? backup.tasks : [];
   const batch = writeBatch(db);
   tasks.forEach(t => {
     const { id, ...rest } = t;
     const ref = id
-      ? doc(db, 'users', userId, 'tasks', id)
-      : doc(collection(db, 'users', userId, 'tasks'));
+      ? doc(db, 'tareas', id)
+      : doc(collection(db, 'tareas'));
     batch.set(ref, { ...rest, updatedAt: new Date().toISOString() });
   });
-  if (backup?.settings) {
+  if (backup?.settings && userId) {
     batch.set(doc(db, 'users', userId, 'settings', 'main'), backup.settings, { merge: true });
   }
   await batch.commit();
