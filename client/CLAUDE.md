@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-This is the React frontend for **Gmail Task Manager**, a task manager UI styled after Gmail. It is one half of a two-part app: this `client/` directory (Vite + React) and a sibling `../server/` directory (Express + JSON file storage) that must run simultaneously in development. There is no monorepo tooling (no workspaces) — the two apps are just adjacent folders, coordinated by scripts in `../package.json`. The client is also an installable **PWA** (see the PWA section).
+This is **Gmail Task Manager** ("Pulse Matrix" in the UI — same project, cosmetic rebrand), a React + Vite PWA task manager. It is a **standalone frontend**: there is no backend server in the request path. Authentication and data live entirely in **Firebase** (Auth + Firestore). The app is live at **https://manager-de-tareas.web.app**, published via Firebase Hosting.
+
+A sibling `../server/` directory (Express + SQLite) still exists in the repo but is **dead code** — nothing in `client/` calls it, it predates the Firebase migration, and it can be deleted without affecting the app. Don't extend it; if email sending (see below) ever gets built, it'll be a serverless function, not this Express server.
+
+Three legacy component files (`src/components/Header.jsx`, `Sidebar.jsx`, `UserMenu.jsx`) are also unused leftovers from before the `Pulse*` rename — the active header/sidebar are `PulseHeader.jsx`/`PulseSidebar.jsx`. Don't edit the `Header`/`Sidebar`/`UserMenu` trio expecting it to affect the running app.
 
 ## Commands
 
@@ -15,67 +19,65 @@ npm run dev       # start Vite dev server (default port 5173)
 npm run build     # production build
 npm run preview   # preview the production build (port 4173) — needed to exercise the PWA/service worker
 npm run lint      # oxlint
-npm run test      # node --test on the pure-logic modules (no framework)
+npm run test      # node --test on src/taskUtils.test.js (the only client test file)
 ```
 
-To run the full stack, from the repo root (`../`):
+**Testing** uses Node's built-in runner (`node --test`), not Jest/Vitest. Only `taskUtils.js` (pure filter/recurrence/priority logic) is covered. UI components and the Firebase data-access layer (`firebase.js`) are not unit-tested — verify Firestore-touching changes by hand in the browser (or Claude-in-Chrome) against the real project, since there's no emulator wired up.
+
+### Deploying
+
+Run from the **repo root** (`../`), not `client/`:
 
 ```
-npm run server    # node server/index.js, listens on :5000
-npm run client    # equivalent to `npm --prefix client run dev`
-npm test          # runs both server and client test suites
+firebase deploy --only hosting          # publish client/dist to manager-de-tareas.web.app
+firebase deploy --only firestore:rules  # publish firestore.rules
 ```
 
-Both the client and server must be running for the app to work — the client is hardcoded to call the backend at `http://localhost:5000`, not a proxied or relative path.
+Deploys are **manual** — there is no CI/CD. A GitHub Actions auto-deploy config exists locally (`firebase init hosting:github` output) but is deliberately gitignored and not wired to a GitHub secret; don't re-enable it without asking. `npm run build` must be run in `client/` before `firebase deploy --only hosting` picks up fresh output (`firebase.json`'s `hosting.public` points at `client/dist`).
 
-**Testing** uses Node's built-in runner (`node --test`), not Jest/Vitest — there is no test framework dependency. Tests cover the pure modules: `server/auth.test.js`, `server/taskFilters.test.js`, and `client/src/taskUtils.test.js`. UI components are not unit-tested.
+**Cache headers matter here.** `firebase.json` sets `Cache-Control: no-cache` on `index.html`, `sw.js`, and `manifest.webmanifest`, and `public, max-age=31536000, immutable` on `/assets/**`. This is load-bearing: Vite content-hashes filenames under `/assets/`, so those can be cached forever, but `index.html` (which references the current hashed filenames) and the service worker must always be revalidated — otherwise a deploy can take up to an hour to reach returning visitors who cached the old `index.html` under a looser policy. If you ever touch `firebase.json`, keep this split.
 
 ## Architecture
 
-**Single-component state, no router, no state library.** `src/App.jsx` owns essentially all application state (auth, tasks, settings, selection, modals, theme, toasts) via `useState`/`useEffect` and passes callbacks down as props to presentational components in `src/components/`. There is no Redux/Zustand/Context — if you need shared state, it goes in `App.jsx` and gets threaded through props. Several handlers (`fetchTasks`, `fetchSettings`, `showToast`, the notification callbacks) are wrapped in `useCallback` so they are stable dependencies for the effects that use them.
+**Single-component state, no router, no state library.** `src/App.jsx` owns essentially all application state (auth, tasks, settings, selection, modals, theme, view, toasts) via `useState`/`useEffect` and passes callbacks down as props to presentational components in `src/components/`. There is no Redux/Zustand/Context — if you need shared state, it goes in `App.jsx` and gets threaded through props.
 
 **Two parallel data paths for tasks — registered vs. guest.** Every task-mutating handler in `App.jsx` branches on `user?.isGuest`:
-- **Registered users**: state is server-backed. Handlers `fetch()` the Express API (`API_BASE = 'http://localhost:5000/api'`), then call `fetchTasks()` to re-pull. No optimistic updates (except bulk selection, which clears eagerly).
-- **Guests**: state lives entirely in the `guestTasks` array (seeded from `DEFAULT_GUEST_TASKS`), mutated in-memory and mirrored to `sessionStorage`. Nothing touches the network. Guest data is wiped on logout/tab close by design.
+- **Registered users**: state is Firestore-backed, real-time. A `subscribeUserTasks(user.uid, ...)` `onSnapshot` listener (wired in a `useEffect` keyed on `user`) keeps `allTasks` in sync automatically — mutation handlers just call the Firestore write and let the listener update the UI; they do **not** also update local state by hand (that used to be a bug — see the note on task paths below).
+- **Guests**: state lives entirely in the `guestTasks` array (seeded from `DEFAULT_GUEST_TASKS`), mutated in-memory. Nothing touches Firebase. The guest *identity* (`gmail_task_guest_user`) is `sessionStorage`-only and is cleared on logout/tab close, as intended — but `guestTasks` itself is mirrored to **`localStorage`** (`gmail_task_local_tasks`) and that key is never cleared on logout. In practice guest task data quietly survives across guest sessions and browser restarts, even though the guest login screen implies a fresh start each time. Don't assume guest data is ephemeral when debugging.
 
-**Filtering / recurrence / priority logic is centralized per runtime, and mirrored across the two.** Rather than inlining these at each call site, they live in one module per side:
-- Client: `src/taskUtils.js` — `filterByTab`/`filterByCategory`/`filterBySearch`/`filterTasks`, `advanceDueDate`/`advanceRecurringTasks`, `getEffectivePriority`/`compareTasksByUrgency`, `getTodayStr`/`dateStrDaysFromToday`.
-- Server: `server/taskFilters.js` (filtering) and `server/db.js` (recurrence) and `server/mailer.js` (effective priority).
+**Firestore data model — everything lives under `users/{uid}/…`.** `firestore.rules` (repo root) only grants access to `match /users/{userId}/{document=**}` for `request.auth.uid == userId`, and denies everything else by default. `src/firebase.js` mirrors this exactly:
+- Tasks: `users/{uid}/tasks/{taskId}` (`subscribeUserTasks`, `addFirebaseTask`, `updateFirebaseTask`, `deleteFirebaseTask`, `batchApplyFirebaseAction`, `exportUserBackup`/`importUserBackup`).
+- Settings: `users/{uid}/settings/main` (`getUserSettings`, `updateUserSettings`).
 
-The client (ESM) and server (CommonJS) can't share one file, so the two copies are kept identical **by convention** — if you change filter/recurrence/priority semantics on one side, change the other. The client uses these helpers in the guest `fetchTasks` branch *and* in the sidebar `counts`, so a badge can never disagree with the list.
+**Do not add a top-level/flat collection for tasks (e.g. a bare `tareas` collection).** An earlier version did exactly that — it bypassed the per-user rule structure entirely, so every read/write was silently permission-denied (infinite "loading" state, no console error) and, had the rules ever been loosened to allow it, would have leaked every user's tasks to every other user. Always write task/setting paths through `users/{uid}/...`, and pass `user.uid` (never `user.username` or `user.email`) as the id segment.
 
-**Tab filters include smart views.** `filterByTab` handles `inbox`/`pending`, `starred`, `scheduled` (future-dated), `completed`, `trash`, plus **`today`** (due today), **`week`** (due within the next 7 days), and **`overdue`** (past-due, not done). Date-oriented tabs keep chronological order; other tabs sort most-urgent-first (`compareTasksByUrgency`).
+**Filtering / recurrence / priority logic lives in `src/taskUtils.js`.** `filterByTab`/`filterByCategory`/`filterBySearch`/`filterTasks`, `advanceDueDate`/`advanceRecurringTasks`, `getEffectivePriority`/`compareTasksByUrgency`, `getTodayStr`/`dateStrDaysFromToday`. Used for both the guest in-memory path and the registered/Firestore path (post-snapshot), so a sidebar badge count can never disagree with the visible list. There is no server-side copy anymore — `taskUtils.js` is the single source of truth.
 
-**The main area is a view switch, not always the task list.** `currentTab` also selects two tool views that replace `TaskList`: `'stats'` → `StatsDashboard` (completion ring, category/priority bars, next-7-days — all computed client-side from `visibleAllTasks`, with every bar directly labeled so color is never the sole identity channel) and `'calendar'` → `CalendarView` (month grid; clicking a day opens the composer prefilled with that date via TaskModal's `initialDate` prop, clicking a task opens the editor). These two sidebar items carry no count badge.
+**Two independent view concerns — don't conflate them.** `currentTab` (sidebar selection: `inbox`/`pending`, `starred`, `scheduled`, `today`, `week`, `overdue`, `completed`, `trash`) drives **which tasks are visible**, via `filterByTab`. `activeView` (`'matrix' | 'list' | 'calendar' | 'stats'`, also settable from the sidebar and from the mobile bottom nav) drives **which top-level screen renders**: `MatrixView` (Eisenhower 2×2 quadrant board, the default/primary view — this is the "Pulse Matrix" branding), `TaskList`, `CalendarView` (month grid; clicking a day opens the composer prefilled via `TaskModal`'s `initialDate`), or `StatsDashboard` (completion ring, category/priority bars, next-7-days, all computed client-side from `visibleAllTasks`). These two states are orthogonal — e.g. you can be on the `starred` tab while viewing `calendar`.
 
-**Tasks carry subtasks.** Each task may have `subtasks: [{ id, text, done }]`. The server sanitizes them (`sanitizeSubtasks` in `index.js`) on create/update. `TaskModal` edits them; `TaskItem` shows a `done/total` progress badge.
+**Tasks carry subtasks.** Each task may have `subtasks: [{ id, text, done }]`, edited in `TaskModal`, shown as a `done/total` progress badge in `TaskItem`/`MatrixView` cards.
 
-**Bulk selection + batch endpoint.** `App.jsx` holds `selectedIds` (a `Set`), cleared whenever the visible set changes. `PATCH /api/tasks/batch` applies one action (`done`/`pending`/`trash`/`restore`/`delete`/`category`) to many ids in a single atomic write; the guest path mutates in memory. `TaskList` renders a contextual bulk-action bar.
+**Bulk selection + batch action.** `App.jsx` holds `selectedIds` (a `Set`), cleared whenever the visible set changes (tab/category/search). `batchApplyFirebaseAction(uid, ids, action, value)` applies one action (`done`/`pending`/`trash`/`restore`/`category`/`delete`) to many ids in a single Firestore batch write; the guest path mutates `guestTasks` in memory the same way. `TaskList`/`MatrixView` render a contextual bulk-action bar.
 
-**Keyboard shortcuts.** A global `keydown` listener in `App.jsx`: `c` compose, `/` focus search (the Header search input has `id="task-search-input"`), and a `g`-then-initial chord to jump views (i/h/v/s/d/p/c/b). Ignored while typing in a field or when any modal is open.
+**Keyboard shortcuts.** A global `keydown` listener in `App.jsx`: `c` compose, `/` focus search (`id="task-search-input"`), and a `g`-then-initial chord to jump views. Ignored while typing in a field or when any modal is open.
 
-**Auth is not token-based, but the login password is hashed.** There's no JWT/session cookie; every "authenticated" API call is unauthenticated at the HTTP level. However, the single login password is stored **scrypt-hashed** (`server/auth.js`, using Node's built-in `crypto` — no dependency). `verifyPassword` falls back to a plaintext compare for legacy records, and `runMaintenance` upgrades a legacy plaintext password to a hash on startup. **`settings.senderPass` (the Gmail app password) is deliberately NOT hashed** — nodemailer needs the real value for SMTP. **CORS is restricted** to the local dev/preview origins (`5173`/`5174`/`4173`/`4174`) in `index.js`; there's no request-level auth, so don't widen it.
+**Mobile layout is a separate nav surface, not a responsive reflow of the desktop sidebar.** Below the `860px` breakpoint (`src/index.css`), a Gmail-style bottom nav bar (`.mobile-bottom-nav`, 4 buttons wired to `setActiveView`) and a floating compose button (`.mobile-fab-btn`, opens `TaskModal`) appear; `PulseSidebar` becomes an off-canvas drawer (`isSidebarOpen`/`onToggleSidebar` from `PulseHeader`) instead of disappearing. If you add a new `activeView`, wire it into both `PulseSidebar`'s desktop switcher and the `.mobile-nav-item` buttons in `App.jsx`, or mobile users will have no way to reach it.
 
-**Backend is a single-user SQLite database** (`server/data.db`), via Node's built-in **`node:sqlite`** (`DatabaseSync`) — no external dependency, no native build. WAL mode is on. `server/db.js` exposes **granular, per-row operations** (`getAllTasks`, `getTaskById`, `createTask`, `updateTask`, `deleteTaskById`, `emptyTrash`, `batchAction`, `getUser`/`updateUser`, `getSettings`/`updateSettings`, `getBackup`/`restoreBackup`, `runMaintenance`) — there is no whole-object read/write, so concurrent mutations can't lost-update each other. Multi-row operations (`batchAction`, `restoreBackup`) run in a transaction.
-- **Storage shape**: booleans are `INTEGER` 0/1, `subtasks` is a JSON string column — the row↔object mappers in `db.js` convert both. `updateTask`/`updateUser`/`updateSettings` merge only the *defined* fields of their argument (so a partial PUT/PATCH touches nothing else).
-- **First-run migration**: on a fresh DB, `db.js` imports a legacy `server/data.json` if present (preserving the hashed password and all tasks), else seeds defaults. `data.json` is no longer written to — it's kept only as the migration source / fallback.
-- **Upkeep** — recurring-task roll-forward and password-hash migration — happens in **`runMaintenance()`**, called at startup and once per cron minute (never on a plain read).
-- **Testing** points `db.js` at a throwaway DB via the `GTM_DB_PATH` env var (see `server/db.test.js`).
-- The experimental-SQLite startup warning is silenced with `--disable-warning=ExperimentalWarning` in the `server`/`start`/`test` scripts.
+**Auth is real Firebase Auth**, email/password only (no Google sign-in — it was deliberately removed). `loginWithEmail`/`registerWithEmail`/`resetUserPassword` (`src/firebase.js`) wrap `signInWithEmailAndPassword`/`createUserWithEmailAndPassword`/`sendPasswordResetEmail`; `Login.jsx` has a "¿Olvidaste tu contraseña?" link that calls `resetUserPassword` and shows Firebase's own password-reset email flow (no custom email template involved). `translateFirebaseError` maps Firebase's `err.code` values to Spanish messages — add new codes there rather than showing raw Firebase error text. Session restore on reload goes through `subscribeAuth` (`onAuthStateChanged`), not just the `localStorage` cache, so login survives across devices, not only reloads. A registered-user record cached from before the Firebase migration (no `uid` field) is treated as invalid and discarded on load.
 
-**Dates are local, not UTC.** Use `getLocalDateStr` (`server/dateUtils.js`) and `getTodayStr` (`client/src/taskUtils.js`), which derive `YYYY-MM-DD` from local date components. Do **not** use `new Date().toISOString().slice(0,10)` for "today" — that's UTC and makes the day flip at a non-midnight local hour in any offset zone (e.g. 18:00 at UTC-6), breaking due-today, recurrence, the scheduled filter, and the daily-summary dedupe.
+**Notifications are browser-only right now.** The `Notification` API path (client-side, gated on permission, polled every 10s against `settings.scheduledTime`) works normally. **Automatic email sending is intentionally deferred** — `EmailPreviewModal`/`emailTemplate.js` still generate a full HTML preview of the daily summary client-side, but the "Enviar por Gmail Ahora" action just tells the user it isn't available yet. Shipping it needs a serverless function (Vercel/Firebase Cloud Function) to hold the Gmail app-password server-side; `server/mailer.js` (legacy) has reusable HTML-generation logic if that gets picked back up.
 
-**Search is debounced.** The search input updates `searchQuery` (instant UI + instant in-memory counts), but the task fetch runs off `debouncedSearch` (300 ms), so registered users don't fire a request per keystroke.
+**Theming** is CSS-variable-based light/dark: `App.jsx` sets `data-theme` on `<html>` and persists the choice (`localStorage`, and to `users/{uid}/settings/main` for registered users); variables are in `src/index.css` under `:root` (light) and `[data-theme="dark"]` (dark). Avoid hardcoded hex colors — use `var(--gmail-*)`.
 
-**Theming** is CSS-variable-based light/dark mode: `App.jsx` sets `data-theme` on `<html>` and persists the choice; variables are in `src/index.css` under `:root` (light) and `[data-theme="dark"]` (dark). Registered users also persist theme via `PUT /api/user/profile`. **Avoid hardcoded hex colors** — use `var(--gmail-*)` so both themes work (native date/time/select controls get `color-scheme: dark` under the dark theme).
-
-**Styling is inline `style={{}}` objects throughout components** (aside from `lucide-react` icons and the badge/pill classes in `index.css`). Follow this pattern rather than introducing CSS modules or a component library. Keyboard focus is restored via a global `:focus-visible` rule (the default outline is removed app-wide).
+**Styling is inline `style={{}}` objects throughout components** (aside from `lucide-react` icons, badge/pill classes, and the mobile-nav/FAB classes in `index.css`). Follow this pattern rather than introducing CSS modules or a component library. Keyboard focus is restored via a global `:focus-visible` rule.
 
 **Modals share an accessibility hook.** `src/useModalA11y.js` gives every dialog (`TaskModal`, `SettingsModal`, `EmailPreviewModal`, `ProfileModal`) Escape-to-close, a focus trap, focus-on-open, and focus-restore-on-close. Wire it with `role="dialog"`, `aria-modal`, an `aria-label`, and `tabIndex={-1}` on the dialog container.
 
-**Notifications are dual-channel**: browser `Notification` API (client-side, gated on permission, polled every 10s against `settings.scheduledTime`) and email summaries (server-side, `server/mailer.js` + nodemailer, on-demand via `POST /api/send-summary` or by a `node-cron` job in `index.js` firing every minute). The client interval and the cron deliberately mirror the scheduled-time comparison for the two notification modes ('browser' vs 'gmail'/'both').
+**Not installable, but still a service-worker-cached app.** The app deliberately has **no `<link rel="manifest">`** in `index.html` (and no `apple-mobile-web-app-*` meta tags) — installability/"Add to Home Screen" was intentionally removed. `client/public/manifest.webmanifest` and the icon files are still present on disk but unlinked/orphaned; don't re-add the manifest `<link>` without checking this is still wanted. The service worker (`sw.js`) stays regardless — it registers only in production (`main.jsx`, guarded by `import.meta.env.PROD`), so offline/fast-load behavior is exercised with `npm run build && npm run preview`, not the dev server. `sw.js` is network-first for navigations, stale-while-revalidate for other same-origin GETs, and ignores cross-origin requests (Firebase's own domains) entirely. See the cache-headers note under Deploying — the SW's network-first strategy only works if `index.html` itself isn't being served stale by Hosting/the browser HTTP cache.
 
-**PWA.** `client/public/` holds `manifest.webmanifest`, a dependency-free `sw.js`, and generated icons (`icon-192.png`, `icon-512.png`, `apple-touch-icon.png`). The service worker is **registered only in production** (`main.jsx`, guarded by `import.meta.env.PROD`) to avoid fighting Vite HMR — so PWA/offline behavior is exercised with `npm run build && npm run preview`, not the dev server. The SW is network-first for navigations/assets, precaches the app shell for offline load, and **ignores the API origin** (`:5000`) so backend calls always hit the network.
+**Dates are local, not UTC.** Use `getTodayStr`/date helpers in `taskUtils.js`, which derive `YYYY-MM-DD` from local date components. Do **not** use `new Date().toISOString().slice(0,10)` for "today" — that's UTC and flips the day at a non-midnight local hour, breaking due-today, recurrence, and the scheduled filter.
+
+**Search is debounced.** `searchQuery` updates instantly (UI + in-memory counts), but `debouncedSearch` (300ms) is what the guest-path filter and any future server-style fetch would key off of.
 
 ## Language
 

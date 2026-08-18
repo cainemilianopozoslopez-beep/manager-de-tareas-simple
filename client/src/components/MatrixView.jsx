@@ -164,7 +164,7 @@ export default function MatrixView({
               color: 'var(--pulse-text-primary)',
               lineHeight: '1.2'
             }}>
-              Matriz Eisenhower de Productividad
+              Matriz de Prioridades y Flujo
             </h1>
             <p style={{ fontSize: '12.5px', color: 'var(--pulse-text-muted)', marginTop: '2px' }}>
               Arrastra las tarjetas entre cuadrantes para reasignar prioridad y urgencia al instante.

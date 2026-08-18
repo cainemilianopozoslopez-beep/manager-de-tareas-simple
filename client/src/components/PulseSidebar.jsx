@@ -27,7 +27,7 @@ export default function PulseSidebar({
 }) {
 
   const mainNavigation = [
-    { id: 'matrix-view', label: 'Matriz Eisenhower', icon: LayoutGrid, isMatrixViewBtn: true },
+    { id: 'matrix-view', label: 'Matriz 2x2 de Prioridades', icon: LayoutGrid, isMatrixViewBtn: true },
     { id: 'inbox', label: 'Bandeja Principal', icon: Inbox, countKey: 'inbox' },
     { id: 'today', label: 'Para Hoy', icon: Sun, countKey: 'today' },
     { id: 'overdue', label: 'Tareas Vencidas', icon: AlertTriangle, countKey: 'overdue', badgeColor: '#ef4444' },

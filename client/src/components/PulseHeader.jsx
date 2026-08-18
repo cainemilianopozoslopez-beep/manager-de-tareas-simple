@@ -88,19 +88,17 @@ export default function PulseHeader({
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => onChangeView('matrix')}>
-          <div style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#ffffff',
-            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
-          }}>
-            <Zap size={20} fill="#ffffff" />
-          </div>
+          <img
+            src="/icon-192.png"
+            alt="TaskPulse Logo"
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              objectFit: 'cover',
+              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+            }}
+          />
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <span style={{
               fontSize: '17px',
@@ -109,7 +107,7 @@ export default function PulseHeader({
               color: 'var(--pulse-text-primary)',
               lineHeight: '1.1'
             }}>
-              Pulse<span style={{ color: 'var(--pulse-accent)' }}>Matrix</span>
+              Task<span style={{ color: 'var(--pulse-accent)' }}>Pulse</span>
             </span>
             <span style={{
               fontSize: '10.5px',
@@ -117,7 +115,7 @@ export default function PulseHeader({
               fontWeight: '500',
               letterSpacing: '0.5px',
               textTransform: 'uppercase'
-            }}>
+            }} className="app-brand-subtitle">
               Productivity Hub
             </span>
           </div>

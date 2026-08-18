@@ -1,7 +1,8 @@
 // Minimal, dependency-free service worker for Gmail Task Manager.
-// Goal: make the app installable and load its shell instantly / offline, WITHOUT
-// caching API responses (the backend lives on a different origin, :5000) and without
-// serving stale code when online.
+// Goal: load the app shell instantly / offline, WITHOUT caching API responses
+// (Firestore/Auth live on a different origin) and without serving stale code
+// when online. The app is intentionally NOT installable as a PWA (no manifest
+// link in index.html) — this worker only exists for fast/offline loading.
 //
 // Strategy:
 //   - navigations  -> network-first, fall back to the cached shell when offline
@@ -9,7 +10,7 @@
 //   - anything cross-origin (the API) or non-GET -> left untouched (goes straight to network)
 
 const CACHE = 'gtm-shell-v1';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
+const SHELL = ['/', '/index.html', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

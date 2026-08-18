@@ -1,14 +1,14 @@
 {
-  "name": "Gmail Task Manager",
-  "short_name": "Tasks",
-  "description": "Gestor de tareas con estética de Gmail: prioridades, recordatorios y subtareas.",
+  "name": "TaskPulse",
+  "short_name": "TaskPulse",
+  "description": "Gestor inteligente de tareas y prioridades en tiempo real.",
   "lang": "es",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#f6f8fc",
-  "theme_color": "#ea4335",
+  "background_color": "#f8fafc",
+  "theme_color": "#3b82f6",
   "icons": [
     {
       "src": "/icon-192.png",

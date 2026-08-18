@@ -101,16 +101,15 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
         alignItems: 'center'
       }} className="animate-fade-in">
 
-        {/* Google / Gmail Branding Icon */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-          <svg width="42" height="42" viewBox="0 0 32 32" fill="none">
-            <path d="M4 24V10L16 19L28 10V24C28 25.1 27.1 26 26 26H6C4.9 26 4 25.1 4 24Z" fill="#EA4335"/>
-            <path d="M28 10L16 19L4 10V8C4 6.9 4.9 6 6 6H26C27.1 6 28 6.9 28 8V10Z" fill="#4285F4"/>
-            <path d="M4 10L16 19V26H6C4.9 26 4 25.1 4 24V10Z" fill="#34A853"/>
-            <path d="M28 10L16 19V26H26C27.1 26 28 25.1 28 24V10Z" fill="#FBBC05"/>
-          </svg>
-          <span style={{ fontSize: '24px', fontWeight: '600', color: 'var(--gmail-text-primary)' }}>
-            Gmail Tasks
+        {/* TaskPulse Branding Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+          <img
+            src="/icon-192.png"
+            alt="TaskPulse Logo"
+            style={{ width: '44px', height: '44px', borderRadius: '12px', boxShadow: '0 4px 14px rgba(59, 130, 246, 0.3)' }}
+          />
+          <span style={{ fontSize: '26px', fontWeight: '700', color: 'var(--gmail-text-primary)', letterSpacing: '-0.5px' }}>
+            Task<span style={{ color: 'var(--pulse-accent, #3b82f6)' }}>Pulse</span>
           </span>
         </div>
 
