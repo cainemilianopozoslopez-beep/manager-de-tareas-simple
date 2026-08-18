@@ -7,10 +7,10 @@ import {
   Clock,
   Star,
   Calendar,
+  CalendarDays,
+  BarChart2,
   CheckCircle2,
-  Trash2,
-  Tag,
-  Plus
+  Trash2
 } from 'lucide-react';
 
 export default function PulseSidebar({
@@ -28,6 +28,8 @@ export default function PulseSidebar({
 
   const mainNavigation = [
     { id: 'matrix-view', label: 'Matriz 2x2 de Prioridades', icon: LayoutGrid, isMatrixViewBtn: true },
+    { id: 'calendar-view', label: 'Vista de Calendario', icon: CalendarDays, view: 'calendar' },
+    { id: 'stats-view', label: 'Métricas', icon: BarChart2, view: 'stats' },
     { id: 'inbox', label: 'Bandeja Principal', icon: Inbox, countKey: 'inbox' },
     { id: 'today', label: 'Para Hoy', icon: Sun, countKey: 'today' },
     { id: 'overdue', label: 'Tareas Vencidas', icon: AlertTriangle, countKey: 'overdue', badgeColor: '#ef4444' },
@@ -58,6 +60,7 @@ export default function PulseSidebar({
 
       <aside
         className={`app-sidebar ${isOpen ? 'open' : ''}`}
+        aria-label="Navegación principal"
         style={{
           width: '240px',
           backgroundColor: 'var(--pulse-sidebar-bg)',
@@ -88,6 +91,8 @@ export default function PulseSidebar({
             const Icon = item.icon;
             const isSelected = item.isMatrixViewBtn
               ? activeView === 'matrix'
+              : item.view
+              ? activeView === item.view
               : (activeView === 'list' && currentTab === item.id);
             const count = item.countKey ? counts[item.countKey] || 0 : null;
 
@@ -97,12 +102,15 @@ export default function PulseSidebar({
                 onClick={() => {
                   if (item.isMatrixViewBtn) {
                     onChangeView('matrix');
+                  } else if (item.view) {
+                    onChangeView(item.view);
                   } else {
                     onChangeView('list');
                     onSelectTab(item.id);
                   }
                   if (isOpen) onClose();
                 }}
+                aria-current={isSelected ? 'page' : undefined}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -183,6 +191,7 @@ export default function PulseSidebar({
                   onSelectCategory(isCatSelected ? '' : cat);
                   if (isOpen) onClose();
                 }}
+                aria-pressed={isCatSelected}
                 style={{
                   display: 'flex',
                   alignItems: 'center',

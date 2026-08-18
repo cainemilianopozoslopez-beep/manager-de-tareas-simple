@@ -109,13 +109,14 @@ export default function TaskModal({
       bottom: '16px',
       right: '24px',
       width: '540px',
+      maxHeight: 'calc(100vh - 32px)',
       backgroundColor: 'var(--gmail-modal-bg)',
       color: 'var(--gmail-text-primary)',
       borderRadius: '12px 12px 0 0',
       boxShadow: '0 8px 30px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.1)',
       border: '1px solid var(--gmail-border)',
       zIndex: 100,
-      overflow: 'hidden'
+      overflowY: 'auto'
     }} className="animate-slide-up task-compose-modal">
 
       {/* Gmail Compose Window Header */}
@@ -272,7 +273,7 @@ export default function TaskModal({
           <div>
             <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--gmail-text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
               <Clock size={11} style={{ verticalAlign: '-1px', marginRight: '3px' }} />
-              Hora Indicada
+              Hora de vencimiento
             </label>
             <input
               type="time"

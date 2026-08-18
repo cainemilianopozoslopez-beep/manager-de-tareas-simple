@@ -1,16 +1,27 @@
-# React + Vite
+# TaskPulse
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Gestor de tareas personal con una matriz de prioridades estilo Eisenhower, calendario, estadísticas y recordatorios. React + Vite en el cliente, Firebase (Auth + Firestore) para cuentas y datos — no hay servidor propio en el camino de la petición.
 
-Currently, two official plugins are available:
+En producción: **https://manager-de-tareas.web.app**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Desarrollo
 
-## React Compiler
+```
+npm install
+npm run dev       # servidor de desarrollo (puerto 5173)
+npm run build     # build de producción
+npm run preview   # sirve el build (puerto 4173) — necesario para probar el service worker/PWA
+npm run lint      # oxlint
+npm run test      # pruebas de src/taskUtils.test.js
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Publicar
 
-## Expanding the Oxlint configuration
+Desde la raíz del repositorio (no desde `client/`):
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+```
+firebase deploy --only hosting          # publica client/dist
+firebase deploy --only firestore:rules  # publica firestore.rules
+```
+
+Ver `CLAUDE.md` para el detalle de arquitectura, modelo de datos y decisiones del proyecto.

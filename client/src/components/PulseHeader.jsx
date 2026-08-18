@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Zap,
   Search,
   Plus,
   Moon,
@@ -19,7 +18,6 @@ export default function PulseHeader({
   onSearchChange,
   onOpenCompose,
   onOpenSettings,
-  onOpenPreview,
   onOpenProfile,
   theme,
   onToggleTheme,
@@ -55,7 +53,7 @@ export default function PulseHeader({
   }, [isUserMenuOpen]);
 
   return (
-    <header style={{
+    <header className="app-header" style={{
       height: '64px',
       backgroundColor: 'var(--pulse-surface)',
       borderBottom: '1px solid var(--pulse-border)',
@@ -116,7 +114,7 @@ export default function PulseHeader({
               letterSpacing: '0.5px',
               textTransform: 'uppercase'
             }} className="app-brand-subtitle">
-              Productivity Hub
+              Centro de Productividad
             </span>
           </div>
         </div>
@@ -343,9 +341,11 @@ export default function PulseHeader({
           </button>
         </div>
 
-        {/* Primary "+ Nueva Tarea" Button */}
+        {/* Primary "+ Nueva Tarea" Button — hidden below 860px, where the
+            floating .mobile-fab-btn ("+ Tarea") already covers this action. */}
         <button
           onClick={() => onOpenCompose()}
+          className="app-header-compose-btn"
           style={{
             height: '38px',
             padding: '0 16px',
@@ -416,6 +416,7 @@ export default function PulseHeader({
               theme={theme}
               onToggleTheme={onToggleTheme}
               onOpenProfileModal={onOpenProfile}
+              onOpenSettings={onOpenSettings}
               onLogout={onLogout}
               onClose={() => setIsUserMenuOpen(false)}
             />

@@ -70,7 +70,7 @@ export default function TaskList({
       case 'week': return 'Esta Semana';
       case 'starred': return 'Tareas Destacadas';
       case 'scheduled': return 'Tareas Programadas';
-      case 'completed': return 'Tareas Completadas (Listas para borrar)';
+      case 'completed': return 'Tareas Completadas';
       case 'trash': return 'Papelera de Tareas';
       default: return 'Todas las Tareas';
     }
@@ -192,8 +192,8 @@ export default function TaskList({
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              backgroundColor: '#fce8e6',
-              color: '#c5221f',
+              backgroundColor: 'var(--pulse-q1-bg, #fce8e6)',
+              color: 'var(--pulse-q1-accent, #c5221f)',
               padding: '6px 12px',
               borderRadius: '16px',
               fontSize: '12.5px',
@@ -285,11 +285,11 @@ export default function TaskList({
             padding: '20px'
           }}>
             {currentTab === 'completed' ? (
-              <CheckCircle2 size={48} color="#137333" style={{ marginBottom: '12px', opacity: 0.8 }} />
+              <CheckCircle2 size={48} color="var(--pulse-q4-accent, #137333)" style={{ marginBottom: '12px', opacity: 0.8 }} />
             ) : currentTab === 'trash' ? (
-              <Trash2 size={48} color="#d93025" style={{ marginBottom: '12px', opacity: 0.8 }} />
+              <Trash2 size={48} color="var(--pulse-q1-accent, #d93025)" style={{ marginBottom: '12px', opacity: 0.8 }} />
             ) : (
-              <Inbox size={48} color="#1a73e8" style={{ marginBottom: '12px', opacity: 0.8 }} />
+              <Inbox size={48} color="var(--pulse-accent, #1a73e8)" style={{ marginBottom: '12px', opacity: 0.8 }} />
             )}
             
             <h3 style={{ fontSize: '16px', fontWeight: '500', color: 'var(--gmail-text-primary)', margin: '0 0 6px 0' }}>
@@ -298,7 +298,7 @@ export default function TaskList({
                'No hay tareas en esta categoría'}
             </h3>
             <p style={{ fontSize: '13px', margin: 0, maxWidth: '320px' }}>
-              {currentTab === 'inbox' ? '¡Todo al día! Puedes hacer clic en "+ Redactar tarea" para añadir un nuevo pendiente.' : 'Crea o cambia el estado de tus tareas para verlas aquí.'}
+              {currentTab === 'inbox' ? '¡Todo al día! Haz clic en "Nueva Tarea" para añadir un nuevo pendiente.' : 'Crea o cambia el estado de tus tareas para verlas aquí.'}
             </p>
           </div>
         ) : (

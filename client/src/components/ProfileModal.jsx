@@ -1,16 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Save, User, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Save, User, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
 import { useModalA11y } from '../useModalA11y';
 import { updateUserDisplayName, changeUserPassword, translateFirebaseError } from '../firebase';
 
-export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile }) {
+export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile, onDeleteAccount }) {
   const [username, setUsername] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const dialogRef = useRef(null);
+  const closeTimeoutRef = useRef(null);
   useModalA11y(isOpen, onClose, dialogRef);
 
   useEffect(() => {
@@ -19,7 +24,18 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile })
       setCurrentPassword('');
       setNewPassword('');
     }
+    setShowDeleteConfirm(false);
+    setDeletePassword('');
+    setDeleteError('');
   }, [user, isOpen]);
+
+  // Clear the pending "close after success" timeout if the component unmounts
+  // (or the modal is closed some other way) before it fires.
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -37,7 +53,7 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile })
       return;
     }
     if (newPassVal && !currentPassVal) {
-      setErrorMsg('Para cambiar la contraseña, ingresá primero tu contraseña actual');
+      setErrorMsg('Para cambiar la contraseña, ingresa primero tu contraseña actual');
       return;
     }
     if (newPassVal && newPassVal.length < 6) {
@@ -56,7 +72,7 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile })
 
       setSuccessMsg('Perfil actualizado correctamente');
       onUpdateProfile({ username: nameVal });
-      setTimeout(() => {
+      closeTimeoutRef.current = setTimeout(() => {
         setSuccessMsg('');
         onClose();
       }, 1500);
@@ -65,6 +81,25 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile })
       setErrorMsg(translateFirebaseError(err));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async (e) => {
+    e.preventDefault();
+    if (!deletePassword.trim()) {
+      setDeleteError('Ingresa tu contraseña para confirmar');
+      return;
+    }
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await onDeleteAccount(deletePassword.trim());
+      // On success the parent logs the user out and this modal unmounts —
+      // nothing left to reset here.
+    } catch (err) {
+      console.error('Error al eliminar la cuenta:', err);
+      setDeleteError(translateFirebaseError(err));
+      setDeleting(false);
     }
   };
 
@@ -120,14 +155,14 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile })
 
           {/* Success / Error Alerts */}
           {successMsg && (
-            <div style={{ backgroundColor: '#e6f4ea', color: '#137333', padding: '10px 14px', borderRadius: '10px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="login-alert-success" style={{ padding: '10px 14px', borderRadius: '10px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <CheckCircle2 size={16} />
               <span>{successMsg}</span>
             </div>
           )}
 
           {errorMsg && (
-            <div style={{ backgroundColor: '#fce8e6', color: '#c5221f', padding: '10px 14px', borderRadius: '10px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="login-alert-error" style={{ padding: '10px 14px', borderRadius: '10px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <AlertCircle size={16} />
               <span>{errorMsg}</span>
             </div>
@@ -154,10 +189,11 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile })
 
           {/* Username Input */}
           <div>
-            <label style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '6px' }}>
+            <label htmlFor="profile-username" style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '6px' }}>
               Nombre de la Cuenta:
             </label>
             <input
+              id="profile-username"
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -199,10 +235,11 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile })
           {/* Current Password Input — only needed to confirm a password change */}
           {newPassword.trim() && (
             <div>
-              <label style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '4px' }}>
+              <label htmlFor="profile-current-password" style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '4px' }}>
                 Contraseña Actual (para confirmar el cambio):
               </label>
               <input
+                id="profile-current-password"
                 type="password"
                 placeholder="Tu contraseña actual..."
                 value={currentPassword}
@@ -256,6 +293,107 @@ export default function ProfileModal({ isOpen, onClose, user, onUpdateProfile })
           </div>
 
         </form>
+
+        {/* Danger Zone: permanent account deletion */}
+        {onDeleteAccount && (
+          <div style={{
+            margin: '0 24px 24px 24px',
+            padding: '16px',
+            borderRadius: '12px',
+            border: '1px solid #fad2cf',
+            backgroundColor: 'rgba(197, 34, 31, 0.06)'
+          }}>
+            {!showDeleteConfirm ? (
+              <>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#c5221f', marginBottom: '4px' }}>
+                  Eliminar cuenta
+                </div>
+                <p style={{ fontSize: '12px', color: 'var(--gmail-text-secondary)', margin: '0 0 10px 0' }}>
+                  Borra tu cuenta y todas tus tareas de forma permanente. No se puede deshacer.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '7px 14px',
+                    borderRadius: '16px',
+                    fontSize: '12.5px',
+                    fontWeight: '700',
+                    color: '#c5221f',
+                    backgroundColor: '#fce8e6'
+                  }}
+                >
+                  <Trash2 size={14} />
+                  <span>Eliminar mi cuenta y mis datos</span>
+                </button>
+              </>
+            ) : (
+              <form onSubmit={handleDeleteAccount}>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#c5221f', marginBottom: '8px' }}>
+                  Esto borrará tu cuenta y todas tus tareas para siempre. Ingresa tu contraseña para confirmar:
+                </div>
+                <input
+                  type="password"
+                  autoFocus
+                  aria-label="Contraseña para confirmar eliminación"
+                  placeholder="Tu contraseña actual..."
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid #fad2cf',
+                    backgroundColor: 'var(--gmail-bg)',
+                    color: 'var(--gmail-text-primary)',
+                    fontSize: '14px',
+                    marginBottom: '8px'
+                  }}
+                />
+                {deleteError && (
+                  <div style={{ fontSize: '12px', color: '#c5221f', marginBottom: '8px' }}>{deleteError}</div>
+                )}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setShowDeleteConfirm(false); setDeletePassword(''); setDeleteError(''); }}
+                    style={{
+                      padding: '7px 14px',
+                      borderRadius: '16px',
+                      fontSize: '12.5px',
+                      fontWeight: '600',
+                      color: 'var(--gmail-text-secondary)',
+                      backgroundColor: 'var(--gmail-hover)'
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={deleting}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '7px 14px',
+                      borderRadius: '16px',
+                      fontSize: '12.5px',
+                      fontWeight: '700',
+                      color: '#ffffff',
+                      backgroundColor: '#c5221f'
+                    }}
+                  >
+                    <Trash2 size={14} />
+                    <span>{deleting ? 'Eliminando...' : 'Sí, eliminar todo'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
 
       </div>
     </div>

@@ -18,6 +18,12 @@ export function useModalA11y(isOpen, onClose, containerRef) {
   useEffect(() => {
     if (!isOpen) return;
 
+    // On phones the floating compose FAB and bottom nav bar are fixed overlays
+    // with a higher z-index than any dialog, so they'd sit on top of (and
+    // swallow taps meant for) buttons near the bottom of an open modal —
+    // notably the compose form's own "Crear Tarea" submit button.
+    document.body.classList.add('modal-open');
+
     prevFocusRef.current = document.activeElement;
     const container = containerRef.current;
 
@@ -55,6 +61,7 @@ export function useModalA11y(isOpen, onClose, containerRef) {
 
     document.addEventListener('keydown', onKeyDown);
     return () => {
+      document.body.classList.remove('modal-open');
       document.removeEventListener('keydown', onKeyDown);
       const prev = prevFocusRef.current;
       if (prev && typeof prev.focus === 'function') prev.focus();

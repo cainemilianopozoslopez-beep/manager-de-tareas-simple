@@ -1,16 +1,10 @@
 import React, { useState } from 'react';
 import {
-  AlertCircle,
-  Clock,
   Zap,
-  CheckCircle2,
   Plus,
-  ArrowRight,
-  Inbox,
   Flame,
   Calendar,
-  Sparkles,
-  HelpCircle
+  Sparkles
 } from 'lucide-react';
 import TaskItem from './TaskItem';
 import { getEisenhowerQuadrant } from '../taskUtils';
@@ -18,7 +12,7 @@ import { getEisenhowerQuadrant } from '../taskUtils';
 const QUADRANTS = [
   {
     id: 'q1',
-    title: 'Hacer Ya (Do First)',
+    title: 'Hacer Ya',
     subtitle: 'Urgente e Importante',
     description: 'Prioridad alta con vencimiento cercano. Resuélvelas primero.',
     icon: Flame,
@@ -29,7 +23,7 @@ const QUADRANTS = [
   },
   {
     id: 'q2',
-    title: 'Planificar (Schedule)',
+    title: 'Planificar',
     subtitle: 'Importante, No Urgente',
     description: 'Metas importantes con plazo amplio o recurrentes.',
     icon: Calendar,
@@ -40,7 +34,7 @@ const QUADRANTS = [
   },
   {
     id: 'q3',
-    title: 'Delegar / Rápido (Delegate)',
+    title: 'Delegar / Rápido',
     subtitle: 'Urgente, No Importante',
     description: 'Tareas secundarias que requieren atención rápida.',
     icon: Zap,
@@ -51,7 +45,7 @@ const QUADRANTS = [
   },
   {
     id: 'q4',
-    title: 'Revisar (Review)',
+    title: 'Revisar',
     subtitle: 'Ni Urgente ni Importante',
     description: 'Actividades de baja prioridad o ideas secundarias.',
     icon: Sparkles,
@@ -346,7 +340,7 @@ export default function MatrixView({
                       onEdit={onEdit}
                       onDelete={onDelete}
                       onToggleSubtask={onToggleSubtask}
-                      isSelected={selectedIds.has(task.id)}
+                      selected={selectedIds.has(task.id)}
                       onToggleSelect={onToggleSelect}
                     />
                   ))

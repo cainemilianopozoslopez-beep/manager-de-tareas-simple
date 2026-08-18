@@ -9,7 +9,9 @@
 //   - same-origin GET assets -> stale-while-revalidate (instant from cache, refresh in bg)
 //   - anything cross-origin (the API) or non-GET -> left untouched (goes straight to network)
 
-const CACHE = 'gtm-shell-v1';
+// Bump this on any deploy that changes what/how the SW caches, so `activate`
+// actually purges the old cache instead of reusing the same name forever.
+const CACHE = 'gtm-shell-v2';
 const SHELL = ['/', '/index.html', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {

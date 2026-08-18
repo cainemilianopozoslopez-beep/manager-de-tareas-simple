@@ -1,11 +1,12 @@
 import React from 'react';
-import { Sun, Moon, LogOut, Settings, ShieldCheck, UserCheck, AlertTriangle } from 'lucide-react';
+import { Sun, Moon, LogOut, Settings, Bell, ShieldCheck, UserCheck, AlertTriangle } from 'lucide-react';
 
 export default function UserMenu({
   user,
   theme,
   onToggleTheme,
   onOpenProfileModal,
+  onOpenSettings,
   onLogout,
   onClose
 }) {
@@ -54,7 +55,7 @@ export default function UserMenu({
         </div>
         <div>
           <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--pulse-text-primary)' }}>
-            {user?.username || 'Caín'}
+            {user?.username || 'Usuario'}
           </div>
           <div style={{ fontSize: '12px', color: isGuest ? '#f59e0b' : 'var(--pulse-text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
             {isGuest ? (
@@ -124,6 +125,31 @@ export default function UserMenu({
             Cambiar
           </button>
         </div>
+
+        {/* Notification schedule & backup */}
+        <button
+          onClick={() => {
+            onClose();
+            onOpenSettings();
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '10px 12px',
+            borderRadius: '12px',
+            fontSize: '13.5px',
+            fontWeight: '500',
+            color: 'var(--pulse-text-primary)',
+            width: '100%',
+            textAlign: 'left'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--pulse-hover)'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <Bell size={18} color="var(--pulse-accent)" />
+          <span>Notificaciones y Respaldo</span>
+        </button>
 
         {/* Profile Settings Option (Only if not guest) */}
         {!isGuest && (

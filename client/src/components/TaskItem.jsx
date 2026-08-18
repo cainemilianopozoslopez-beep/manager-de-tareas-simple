@@ -26,13 +26,11 @@ export default function TaskItem({
   onEdit,
   onDelete,
   selected = false,
-  isSelected,
   onToggleSelect,
   onToggleSubtask
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
-  const activeSelected = selected || isSelected;
 
   const getPriorityBadgeClass = (p) => {
     switch (p) {
@@ -57,8 +55,13 @@ export default function TaskItem({
     if (!task.dueDate && !task.dueTime) return '';
     const todayStr = getTodayStr();
     if (task.dueDate && task.dueDate !== todayStr) {
-      const [, m, d] = task.dueDate.split('-');
-      return `${d}/${m}${task.dueTime ? ' ' + task.dueTime : ''}`;
+      const [y, m, d] = task.dueDate.split('-');
+      // Only show the year when it differs from the current one — "18/08" for
+      // this year, "18/08/2027" otherwise, so a far-future or stale/overdue
+      // task from a different year isn't mistaken for one due this year.
+      const currentYear = todayStr.split('-')[0];
+      const dateLabel = y === currentYear ? `${d}/${m}` : `${d}/${m}/${y}`;
+      return `${dateLabel}${task.dueTime ? ' ' + task.dueTime : ''}`;
     }
     return task.dueTime ? `Hoy ${task.dueTime}` : 'Hoy';
   };
@@ -88,7 +91,7 @@ export default function TaskItem({
         padding: '12px 14px',
         borderRadius: '12px',
         border: '1px solid var(--pulse-border)',
-        backgroundColor: activeSelected
+        backgroundColor: selected
           ? 'var(--pulse-active-tab)'
           : task.done
           ? 'var(--pulse-sidebar-bg)'
@@ -125,16 +128,16 @@ export default function TaskItem({
           e.stopPropagation();
           onToggleSelect?.(task.id);
         }}
-        aria-label={activeSelected ? 'Quitar de la selección' : 'Seleccionar tarea'}
-        title={activeSelected ? 'Quitar de la selección' : 'Seleccionar tarea'}
+        aria-label={selected ? 'Quitar de la selección' : 'Seleccionar tarea'}
+        title={selected ? 'Quitar de la selección' : 'Seleccionar tarea'}
         style={{
           padding: '2px',
-          color: activeSelected ? 'var(--pulse-accent)' : 'var(--pulse-text-muted)',
+          color: selected ? 'var(--pulse-accent)' : 'var(--pulse-text-muted)',
           display: 'flex',
           alignItems: 'center'
         }}
       >
-        {activeSelected ? <CheckSquare size={17} /> : <Square size={17} />}
+        {selected ? <CheckSquare size={17} /> : <Square size={17} />}
       </button>
 
       {/* Done Checkbox */}
@@ -193,7 +196,7 @@ export default function TaskItem({
           {/* Category Pill */}
           {task.category && (
             <span
-              className={`pill-${task.category.toLowerCase()}`}
+              className={getCategoryPillClass(task.category)}
               style={{
                 fontSize: '10.5px',
                 fontWeight: '600',
@@ -421,7 +424,7 @@ export default function TaskItem({
           aria-label="Editar tarea"
           title="Editar tarea"
           style={{
-            padding: '6px',
+            padding: '10px',
             borderRadius: '8px',
             color: 'var(--pulse-text-secondary)',
             display: 'flex',
@@ -439,9 +442,9 @@ export default function TaskItem({
           aria-label="Borrar tarea"
           title="Borrar tarea"
           style={{
-            padding: '6px',
+            padding: '10px',
             borderRadius: '8px',
-            color: '#ef4444',
+            color: 'var(--pulse-q1-accent, #ef4444)',
             display: 'flex',
             alignItems: 'center'
           }}

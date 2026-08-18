@@ -5,15 +5,14 @@ import MatrixView from './components/MatrixView';
 import TaskList from './components/TaskList';
 import TaskModal from './components/TaskModal';
 import SettingsModal from './components/SettingsModal';
-import EmailPreviewModal from './components/EmailPreviewModal';
 import Login from './components/Login';
 import ProfileModal from './components/ProfileModal';
 import StatsDashboard from './components/StatsDashboard';
 import CalendarView from './components/CalendarView';
+import MatrixOnboarding from './components/MatrixOnboarding';
 import { CheckCircle2, AlertCircle, Plus, LayoutGrid, List, Calendar, BarChart2 } from 'lucide-react';
 import { getTodayStr, dateStrDaysFromToday, advanceRecurringTasks, filterTasks, filterByTab, filterByCategory, filterBySearch } from './taskUtils';
 import {
-  db,
   subscribeAuth,
   subscribeUserTasks,
   addFirebaseTask,
@@ -24,6 +23,7 @@ import {
   updateUserSettings,
   exportUserBackup,
   importUserBackup,
+  deleteUserAccount,
   logoutUser
 } from './firebase';
 
@@ -79,10 +79,13 @@ export default function App() {
     return parsed;
   });
 
-  // Local Tasks State (Stored persistently in localStorage)
+  // Local Tasks State (Guest mode only — sessionStorage, so it truly clears when the
+  // tab/page closes, matching the "se borrará al cerrar la página" promise on the
+  // login screen. A previous version also mirrored this to localStorage, which
+  // silently survived browser restarts; that leftover key is purged below.)
   const [guestTasks, setGuestTasks] = useState(() => {
-    const savedLocalTasks = localStorage.getItem('gmail_task_local_tasks') || sessionStorage.getItem('gmail_task_guest_tasks');
-    return savedLocalTasks ? JSON.parse(savedLocalTasks) : DEFAULT_GUEST_TASKS;
+    const savedSessionTasks = sessionStorage.getItem('gmail_task_guest_tasks');
+    return savedSessionTasks ? JSON.parse(savedSessionTasks) : DEFAULT_GUEST_TASKS;
   });
 
   // Theme State ('light' | 'dark')
@@ -102,10 +105,6 @@ export default function App() {
   // value, so we don't fire a server round-trip per character.
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(false);
-  // No async send-in-progress state needed while email sending is deferred (see
-  // handleSendEmailNow) — kept as a prop so EmailPreviewModal's button still works
-  // once that feature ships.
-  const [sending] = useState(false);
   const [toast, setToast] = useState(null);
 
   // Bulk selection: ids of tasks currently checked for a batch action.
@@ -122,7 +121,6 @@ export default function App() {
   // Prefilled due date when composing from the calendar (null = default to today).
   const [composeDate, setComposeDate] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -137,12 +135,20 @@ export default function App() {
   const toastTimeoutRef = useRef(null);
   const UNDO_WINDOW_MS = 5000;
 
-  // Synchronize Tasks to localStorage so they persist across sessions
+  // Keep guest tasks synced to sessionStorage (survives a reload of the same
+  // tab, but not a new tab or browser restart — see the note above).
   useEffect(() => {
     if (user?.isGuest) {
-      localStorage.setItem('gmail_task_local_tasks', JSON.stringify(guestTasks));
+      sessionStorage.setItem('gmail_task_guest_tasks', JSON.stringify(guestTasks));
     }
   }, [guestTasks, user]);
+
+  // One-time cleanup: purge the old localStorage guest-task mirror from
+  // earlier versions, which persisted guest data across browser restarts
+  // despite the login screen promising it gets erased on page close.
+  useEffect(() => {
+    localStorage.removeItem('gmail_task_local_tasks');
+  }, []);
 
   // Apply Theme attribute to document element
   useEffect(() => {
@@ -260,6 +266,16 @@ export default function App() {
     showToast('Perfil actualizado correctamente');
   };
 
+  // Permanently delete the account and all of its data (right to erasure).
+  // Throws on failure so ProfileModal can show the error and let the user retry —
+  // only clears local session state after Firestore + Auth deletion succeed.
+  const handleDeleteAccount = async (password) => {
+    await deleteUserAccount(password);
+    localStorage.removeItem('gmail_task_user');
+    setUser(null);
+    showToast('Tu cuenta y tus datos fueron eliminados permanentemente.');
+  };
+
   // Request Web Browser Notification Permission
   const requestNotificationPermission = useCallback(async (showSuccessToast = true) => {
     if (!('Notification' in window)) {
@@ -327,14 +343,24 @@ export default function App() {
     if (!user || user.isGuest || !user.uid) return;
 
     setLoading(true);
-    const unsubscribe = subscribeUserTasks(user.uid, (firestoreTasks) => {
-      const advanced = advanceRecurringTasks(firestoreTasks);
-      setAllTasks(advanced);
-      setLoading(false);
-    });
+    const unsubscribe = subscribeUserTasks(
+      user.uid,
+      (firestoreTasks) => {
+        const advanced = advanceRecurringTasks(firestoreTasks);
+        setAllTasks(advanced);
+        setLoading(false);
+      },
+      () => {
+        // Keep whatever tasks were last loaded instead of wiping them to
+        // empty — a subscription error is usually transient (network blip),
+        // not "you have zero tasks now".
+        setLoading(false);
+        showToast('No se pudo conectar con el servidor. Tus tareas visibles pueden no estar actualizadas.', 'error');
+      }
+    );
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, showToast]);
 
   // Fetch Tasks (Handles Server DB, Firestore, or Guest Session Storage)
   const fetchTasks = useCallback(async () => {
@@ -440,7 +466,7 @@ export default function App() {
       if (!user) return;
       const tag = e.target.tagName;
       const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable;
-      const modalOpen = isTaskModalOpen || isSettingsOpen || isPreviewOpen || isProfileModalOpen;
+      const modalOpen = isTaskModalOpen || isSettingsOpen || isProfileModalOpen;
       if (typing || modalOpen || e.metaKey || e.ctrlKey || e.altKey) return;
 
       const now = Date.now();
@@ -465,7 +491,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [user, isTaskModalOpen, isSettingsOpen, isPreviewOpen, isProfileModalOpen]);
+  }, [user, isTaskModalOpen, isSettingsOpen, isProfileModalOpen]);
 
   // ---- Bulk selection ----
   const toggleSelect = (id) => setSelectedIds(prev => {
@@ -526,7 +552,7 @@ export default function App() {
       } else {
         const newTask = {
           ...taskData,
-          id: 'task-' + Date.now(),
+          id: 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
           starred: false,
           done: false,
           trash: false,
@@ -534,9 +560,6 @@ export default function App() {
           updatedAt: new Date().toISOString()
         };
         setGuestTasks(prev => [newTask, ...prev]);
-        setCurrentTab('inbox');
-        setCurrentCategory('');
-        setSearchQuery('');
         showToast('Nueva tarea guardada');
       }
       return;
@@ -554,14 +577,14 @@ export default function App() {
           done: false,
           trash: false
         });
-        setCurrentTab('inbox');
-        setCurrentCategory('');
-        setSearchQuery('');
         showToast('Nueva tarea guardada');
       }
     } catch (err) {
       console.error('Error al guardar en Firestore:', err);
       showToast('Error al guardar la tarea', 'error');
+      // Re-thrown so TaskModal's handleSubmit sees the failure and keeps the
+      // form open with what the user typed, instead of closing as if it saved.
+      throw err;
     }
   };
 
@@ -703,6 +726,14 @@ export default function App() {
 
   // Empty Trash: same undo pattern as handleDeleteTask, applied to every trashed task at once.
   const handleEmptyTrash = () => {
+    // A second click while the first batch's undo window is still open would
+    // overwrite emptyTrashTimeoutRef, orphaning the first timer (it still fires,
+    // but its own "Deshacer" button can no longer cancel it) and making the
+    // second toast's undo cancel the wrong batch. Nothing changed in between —
+    // the trashed set is identical until the pending batch actually commits —
+    // so just ignore the repeat click instead.
+    if (emptyTrashTimeoutRef.current) return;
+
     const trashedIds = visibleAllTasks.filter(t => t.trash).map(t => t.id);
     if (trashedIds.length === 0) return;
 
@@ -809,17 +840,6 @@ export default function App() {
     }
   };
 
-  // Send Email Summary — email sending needs a server that can hold the Gmail
-  // credentials safely, which the cloud version doesn't have yet (planned as a
-  // follow-up serverless function). Browser notifications keep working meanwhile.
-  const handleSendEmailNow = async () => {
-    if (user?.isGuest) {
-      showToast('El envío de correo usa la cuenta real, no está disponible en Modo Invitado', 'error');
-      return;
-    }
-    showToast('✉️ El envío automático de correo todavía no está disponible en la versión web. Mientras tanto, usá las notificaciones del navegador.', 'error');
-  };
-
   const handleMoveToQuadrant = async (taskId, targetQuadrant) => {
     const today = getTodayStr();
     let updates = {};
@@ -924,12 +944,15 @@ export default function App() {
       
       {/* Toast Notification */}
       {toast && (
-        <div style={{
+        <div
+          role="alert"
+          aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
+          style={{
           position: 'fixed',
           bottom: '24px',
           left: '24px',
-          backgroundColor: '#202124',
-          color: '#ffffff',
+          backgroundColor: 'var(--pulse-surface-elevated, #202124)',
+          color: 'var(--pulse-text-primary, #ffffff)',
           padding: '12px 20px',
           borderRadius: '24px',
           boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
@@ -939,9 +962,9 @@ export default function App() {
           alignItems: 'center',
           gap: '10px',
           zIndex: 300,
-          borderLeft: toast.type === 'error' ? '4px solid #ea4335' : '4px solid #34a853'
+          borderLeft: toast.type === 'error' ? '4px solid var(--pulse-q1-accent, #ea4335)' : '4px solid var(--pulse-q4-accent, #34a853)'
         }} className="animate-fade-in">
-          {toast.type === 'error' ? <AlertCircle size={18} color="#ea4335" /> : <CheckCircle2 size={18} color="#34a853" />}
+          {toast.type === 'error' ? <AlertCircle size={18} color="var(--pulse-q1-accent, #ea4335)" /> : <CheckCircle2 size={18} color="var(--pulse-q4-accent, #34a853)" />}
           <span>{toast.message}</span>
           {toast.action && (
             <button
@@ -971,7 +994,6 @@ export default function App() {
         onSearchChange={setSearchQuery}
         onOpenCompose={() => { setEditingTask(null); setIsTaskModalOpen(true); }}
         onOpenSettings={() => { setIsSettingsOpen(true); setIsSidebarOpen(false); }}
-        onOpenPreview={() => { setIsPreviewOpen(true); setIsSidebarOpen(false); }}
         user={user}
         theme={theme}
         onToggleTheme={handleToggleTheme}
@@ -1003,6 +1025,8 @@ export default function App() {
 
         {/* Main Section: Matrix 2x2, Stats Dashboard, Calendar, or Task List */}
         {activeView === 'matrix' ? (
+          <>
+          <MatrixOnboarding />
           <MatrixView
             tasks={visibleAllTasks}
             loading={loading}
@@ -1022,6 +1046,7 @@ export default function App() {
             selectedIds={selectedIds}
             onToggleSelect={toggleSelect}
           />
+          </>
         ) : activeView === 'stats' ? (
           <StatsDashboard tasks={visibleAllTasks} />
         ) : activeView === 'calendar' ? (
@@ -1087,6 +1112,7 @@ export default function App() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         settings={settings}
+        isGuest={Boolean(user?.isGuest)}
         onSaveSettings={handleSaveSettings}
         onTriggerNotification={triggerBrowserNotification}
         notificationPermission={notificationPermission}
@@ -1095,15 +1121,6 @@ export default function App() {
         onImportBackup={handleImportBackup}
       />
 
-      {/* Email Preview Modal */}
-      <EmailPreviewModal
-        isOpen={isPreviewOpen}
-        onClose={() => setIsPreviewOpen(false)}
-        onSendNow={handleSendEmailNow}
-        sending={sending}
-        pendingTasks={visibleAllTasks.filter(t => !t.done && !t.trash)}
-        scheduledTime={settings?.scheduledTime}
-      />
 
       {/* Account / Profile Modal */}
       <ProfileModal
@@ -1111,6 +1128,7 @@ export default function App() {
         onClose={() => setIsProfileModalOpen(false)}
         user={user}
         onUpdateProfile={handleUpdateProfile}
+        onDeleteAccount={handleDeleteAccount}
       />
 
       {/* Mobile Floating Action Button (Gmail-style FAB) */}
@@ -1155,7 +1173,7 @@ export default function App() {
           className={`mobile-nav-item ${activeView === 'stats' ? 'active' : ''}`}
         >
           <BarChart2 size={20} />
-          <span>Stats</span>
+          <span>Métricas</span>
         </button>
       </nav>
 

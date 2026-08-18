@@ -5,7 +5,12 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  updateProfile,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
+  deleteUser
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -19,7 +24,8 @@ import {
   setDoc,
   onSnapshot,
   query,
-  orderBy
+  orderBy,
+  writeBatch
 } from 'firebase/firestore';
 
 // Firebase Configuration from Google Console
@@ -40,7 +46,7 @@ const db = getFirestore(app);
 export const isFirebaseConfigured = true;
 
 // Export Firebase instance and Firestore
-export { app, auth, db, getFirestore };
+export { app, auth, db };
 
 // ---- Error messages -------------------------------------------------------
 // Firebase Auth throws errors with a `.code` like 'auth/wrong-password'.
@@ -49,16 +55,16 @@ const FIREBASE_ERROR_MESSAGES = {
   'auth/email-already-in-use': 'Ese correo ya está registrado. Intenta iniciar sesión.',
   'auth/invalid-email': 'El correo electrónico no es válido.',
   'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
-  'auth/user-not-found': 'Ese correo aún no está registrado. Haz clic en "¿No tienes cuenta? Registrate".',
+  'auth/user-not-found': 'Ese correo aún no está registrado. Haz clic en "¿No tienes cuenta? Regístrate".',
   'auth/wrong-password': 'Contraseña incorrecta. Revisa tu contraseña o restablece tu acceso.',
-  'auth/invalid-credential': 'Correo o contraseña incorrectos. Si es tu primera vez, haz clic en "¿No tienes cuenta? Registrate".',
+  'auth/invalid-credential': 'Correo o contraseña incorrectos. Si es tu primera vez, haz clic en "¿No tienes cuenta? Regístrate".',
   'auth/too-many-requests': 'Demasiados intentos fallidos. Espera un momento y vuelve a intentar.',
   'auth/requires-recent-login': 'Por seguridad, debes volver a iniciar sesión.',
   'auth/network-request-failed': 'Error de conexión. Revisa tu conexión a internet.'
 };
 
 export function translateFirebaseError(err) {
-  return FIREBASE_ERROR_MESSAGES[err?.code] || 'Ocurrió un error inesperado. Intentá de nuevo.';
+  return FIREBASE_ERROR_MESSAGES[err?.code] || 'Ocurrió un error inesperado. Intenta de nuevo.';
 }
 
 // ---- Auth helpers -----------------------------------------------------------
@@ -75,12 +81,6 @@ export const registerWithEmail = (email, password) => {
 export const resetUserPassword = (email) => {
   if (!auth) return Promise.reject(new Error('Firebase no está configurado'));
   return sendPasswordResetEmail(auth, email);
-};
-
-export const loginWithGoogle = () => {
-  if (!auth) return Promise.reject(new Error('Firebase no está configurado'));
-  const provider = new GoogleAuthProvider();
-  return signInWithPopup(auth, provider);
 };
 
 export const logoutUser = () => {
@@ -112,7 +112,11 @@ export const changeUserPassword = async (currentPassword, newPassword) => {
 // firestore.rules (which only grants access under users/{request.auth.uid}) ----
 const userTasksRef = (userId) => collection(db, 'users', userId, 'tasks');
 
-export const subscribeUserTasks = (userId, callback) => {
+// `onError`, if given, is called on a subscription error (e.g. a transient network
+// blip) INSTEAD of `callback` — so a temporary Firestore hiccup surfaces as an error
+// the caller can show, rather than silently wiping the task list to empty (which used
+// to look indistinguishable from "you have no tasks" and could look like data loss).
+export const subscribeUserTasks = (userId, callback, onError) => {
   if (!db) return () => {};
   const q = query(userTasksRef(userId), orderBy('createdAt', 'desc'));
 
@@ -124,7 +128,7 @@ export const subscribeUserTasks = (userId, callback) => {
     callback(tasks);
   }, (err) => {
     console.error('Firestore subscription error:', err);
-    callback([]);
+    onError?.(err);
   });
 };
 
@@ -182,13 +186,8 @@ export const batchApplyFirebaseAction = async (userId, ids, action, value) => {
 export const DEFAULT_USER_SETTINGS = {
   theme: 'light',
   notificationMode: 'browser',
-  senderEmail: '',
-  senderPass: '',
-  recipientEmail: '',
   scheduledTime: '08:00',
-  autoSendEnabled: true,
-  lastSentAt: null,
-  lastSentStatus: null
+  autoSendEnabled: true
 };
 
 export const getUserSettings = async (userId) => {
@@ -236,4 +235,28 @@ export const importUserBackup = async (userId, backup) => {
   }
   await batch.commit();
   return tasks.length;
+};
+
+// ---- Account deletion (GDPR-style "right to erasure") ----
+// Requires a recent login, same as changeUserPassword — re-authenticates with the
+// current password first. Deletes every task and the settings doc, then the Auth
+// account itself. Firestore writes happen in batches of 500 (Firestore's per-batch
+// limit); this is fine for a personal task list but would need paging past a few
+// hundred thousand tasks, which is not a realistic scenario here.
+export const deleteUserAccount = async (currentPassword) => {
+  if (!auth?.currentUser) throw new Error('No hay sesión activa');
+  const user = auth.currentUser;
+  const cred = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, cred);
+
+  const snap = await getDocs(userTasksRef(user.uid));
+  const docRefs = snap.docs.map(d => d.ref);
+  docRefs.push(doc(db, 'users', user.uid, 'settings', 'main'));
+  for (let i = 0; i < docRefs.length; i += 500) {
+    const batch = writeBatch(db);
+    docRefs.slice(i, i + 500).forEach(ref => batch.delete(ref));
+    await batch.commit();
+  }
+
+  await deleteUser(user);
 };

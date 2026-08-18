@@ -58,7 +58,7 @@ export default function CalendarView({ tasks, onEdit, onCompose }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', padding: '12px 16px', borderBottom: '1px solid var(--gmail-border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button onClick={() => shiftMonth(-1)} title="Mes anterior" aria-label="Mes anterior" style={{ padding: '6px', borderRadius: '50%', display: 'flex', color: 'var(--gmail-text-secondary)' }}><ChevronLeft size={18} /></button>
-          <span style={{ fontSize: '15px', fontWeight: '700', color: 'var(--gmail-text-primary)', minWidth: '150px', textAlign: 'center' }}>{monthLabel}</span>
+          <span className="calendar-toolbar-month" style={{ fontSize: '15px', fontWeight: '700', color: 'var(--gmail-text-primary)', minWidth: '150px', textAlign: 'center' }}>{monthLabel}</span>
           <button onClick={() => shiftMonth(1)} title="Mes siguiente" aria-label="Mes siguiente" style={{ padding: '6px', borderRadius: '50%', display: 'flex', color: 'var(--gmail-text-secondary)' }}><ChevronRight size={18} /></button>
         </div>
         <button onClick={goToday} style={btnStyle}>Hoy</button>
@@ -67,7 +67,7 @@ export default function CalendarView({ tasks, onEdit, onCompose }) {
       {/* Weekday header */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--gmail-border)' }}>
         {WEEKDAYS.map(w => (
-          <div key={w} style={{ padding: '8px 0', textAlign: 'center', fontSize: '11px', fontWeight: '700', color: 'var(--gmail-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{w}</div>
+          <div key={w} className="calendar-weekday-header" style={{ padding: '8px 0', textAlign: 'center', fontSize: '11px', fontWeight: '700', color: 'var(--gmail-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{w}</div>
         ))}
       </div>
 
@@ -79,9 +79,15 @@ export default function CalendarView({ tasks, onEdit, onCompose }) {
           return (
             <div
               key={idx}
-              onClick={() => onCompose?.(cell.dateStr)}
+              className="calendar-cell"
+              onClick={() => {
+                if (window.confirm(`¿Crear una tarea para el día ${cell.dateStr}?`)) {
+                  onCompose?.(cell.dateStr);
+                }
+              }}
               title="Clic para crear una tarea en este día"
               style={{
+                minWidth: 0,
                 borderRight: (idx % 7 !== 6) ? '1px solid var(--gmail-border)' : 'none',
                 borderBottom: '1px solid var(--gmail-border)',
                 minHeight: '92px',
@@ -95,11 +101,11 @@ export default function CalendarView({ tasks, onEdit, onCompose }) {
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <span style={{
+                <span className="calendar-day-num" style={{
                   fontSize: '12px',
                   fontWeight: isToday ? '700' : '500',
                   color: isToday ? '#ffffff' : 'var(--gmail-text-secondary)',
-                  backgroundColor: isToday ? '#1a73e8' : 'transparent',
+                  backgroundColor: isToday ? 'var(--pulse-accent, #1a73e8)' : 'transparent',
                   borderRadius: '50%',
                   width: '22px', height: '22px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center'
@@ -109,6 +115,7 @@ export default function CalendarView({ tasks, onEdit, onCompose }) {
               {dayTasks.slice(0, MAX_CHIPS).map(t => (
                 <button
                   key={t.id}
+                  className="calendar-task-chip"
                   onClick={(e) => { e.stopPropagation(); onEdit?.(t); }}
                   title={t.title}
                   style={{
@@ -123,7 +130,7 @@ export default function CalendarView({ tasks, onEdit, onCompose }) {
                   }}
                 >
                   <span style={{ width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0, backgroundColor: CATEGORY_COLORS[(t.category || 'general').toLowerCase()] || '#5f6368' }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.dueTime ? `${t.dueTime} ` : ''}{t.title}</span>
+                  <span className="calendar-task-chip-label" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.dueTime ? `${t.dueTime} ` : ''}{t.title}</span>
                 </button>
               ))}
 

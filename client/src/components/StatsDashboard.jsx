@@ -186,7 +186,7 @@ function Wrapper({ children }) {
       overflowY: 'auto',
       padding: '20px'
     }}>
-      <h2 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--gmail-text-primary)', margin: '0 0 16px 0' }}>Estadísticas</h2>
+      <h2 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--gmail-text-primary)', margin: '0 0 16px 0' }}>Métricas</h2>
       {children}
     </main>
   );

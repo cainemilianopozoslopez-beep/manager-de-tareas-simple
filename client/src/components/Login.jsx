@@ -40,7 +40,7 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
       return;
     }
     if (!isFirebaseConfigured) {
-      setError('Firebase todavía no está configurado en esta app. Avisale a quien la administra.');
+      setError('Firebase todavía no está configurado en esta app. Avisa a quien la administra.');
       return;
     }
 
@@ -117,16 +117,13 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
           {isRegistering ? 'Crear Cuenta' : 'Iniciar Sesión'}
         </h1>
         <p style={{ fontSize: '14px', color: 'var(--gmail-text-secondary)', marginBottom: '24px', textAlign: 'center' }}>
-          Tu cuenta se guarda en la nube: entrá desde cualquier dispositivo
+          Tu cuenta se guarda en la nube: entra desde cualquier dispositivo
         </p>
 
         {/* Error Alert */}
         {error && (
-          <div style={{
+          <div className="login-alert-error" style={{
             width: '100%',
-            backgroundColor: '#fce8e6',
-            color: '#c5221f',
-            border: '1px solid #fad2cf',
             padding: '12px 16px',
             borderRadius: '12px',
             fontSize: '13px',
@@ -142,11 +139,8 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
         )}
 
         {resetMessage && (
-          <div style={{
+          <div className="login-alert-success" style={{
             width: '100%',
-            backgroundColor: '#e6f4ea',
-            color: '#137333',
-            border: '1px solid #ceead6',
             padding: '12px 16px',
             borderRadius: '12px',
             fontSize: '13px',
@@ -167,12 +161,13 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
           {/* Display name — only when registering */}
           {isRegistering && (
             <div>
-              <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '6px' }}>
+              <label htmlFor="login-display-name" style={{ fontSize: '13px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '6px' }}>
                 Tu Nombre:
               </label>
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <UserCircle size={18} color="var(--gmail-text-muted)" style={{ position: 'absolute', left: '14px' }} />
                 <input
+                  id="login-display-name"
                   type="text"
                   placeholder="Ej: Caín"
                   value={displayName}
@@ -195,13 +190,14 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
 
           {/* Email */}
           <div>
-            <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '6px' }}>
-              Correo Electrónico:
-            </label>
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              <Mail size={18} color="var(--gmail-text-muted)" style={{ position: 'absolute', left: '14px' }} />
-              <input
-                type="email"
+              <label htmlFor="login-email" style={{ fontSize: '13px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '6px' }}>
+                Correo Electrónico:
+              </label>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <Mail size={18} color="var(--gmail-text-muted)" style={{ position: 'absolute', left: '14px' }} />
+                <input
+                  id="login-email"
+                  type="email"
                 placeholder="tu@correo.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -222,13 +218,14 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
 
           {/* Password */}
           <div>
-            <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '6px' }}>
-              Contraseña:
-            </label>
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              <Lock size={18} color="var(--gmail-text-muted)" style={{ position: 'absolute', left: '14px' }} />
-              <input
-                type="password"
+              <label htmlFor="login-password" style={{ fontSize: '13px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '6px' }}>
+                Contraseña:
+              </label>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <Lock size={18} color="var(--gmail-text-muted)" style={{ position: 'absolute', left: '14px' }} />
+                <input
+                  id="login-password"
+                  type="password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -269,7 +266,7 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
               onClick={() => { setIsRegistering(!isRegistering); setError(''); setResetMessage(''); }}
               style={{ fontSize: '12.5px', color: 'var(--gmail-blue)', fontWeight: '600', background: 'none', border: 'none', cursor: 'pointer' }}
             >
-              {isRegistering ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Registrate'}
+              {isRegistering ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
             </button>
           </div>
 
@@ -279,7 +276,7 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
             disabled={loading}
             style={{
               width: '100%',
-              backgroundColor: '#1a73e8',
+              backgroundColor: 'var(--pulse-accent, #1a73e8)',
               color: '#ffffff',
               padding: '13px',
               borderRadius: '24px',
@@ -295,14 +292,14 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
               cursor: 'pointer'
             }}
           >
-            <span>{loading ? 'Procesando...' : isRegistering ? 'Crear Cuenta' : 'Acceder con Cuenta'}</span>
+            <span>{loading ? 'Procesando...' : isRegistering ? 'Crear Cuenta' : 'Iniciar sesión'}</span>
             {!loading && <ArrowRight size={18} />}
           </button>
 
           {/* Divider */}
           <div style={{ display: 'flex', alignItems: 'center', margin: '8px 0', gap: '10px' }}>
             <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--gmail-border)' }} />
-            <span style={{ fontSize: '12px', color: 'var(--gmail-text-muted)', fontWeight: '500' }}>o también</span>
+            <span style={{ fontSize: '12px', color: 'var(--gmail-text-muted)', fontWeight: '500' }}>o</span>
             <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--gmail-border)' }} />
           </div>
 
@@ -333,6 +330,12 @@ export default function Login({ onLoginSuccess, onGuestLogin }) {
 
           <p style={{ fontSize: '11.5px', color: 'var(--gmail-text-muted)', textAlign: 'center', margin: '2px 0 0 0' }}>
             * En <strong>Modo Invitado</strong> no necesitas cuenta. Todo lo que hagas se borrará automáticamente al cerrar la página.
+          </p>
+
+          <p style={{ fontSize: '10.5px', color: 'var(--gmail-text-muted)', textAlign: 'center', margin: '8px 0 0 0' }}>
+            <a href="/privacy-policy.html" target="_blank" style={{ color: 'var(--gmail-text-muted)', textDecoration: 'underline' }}>Privacidad</a>
+            {' · '}
+            <a href="/terms-of-service.html" target="_blank" style={{ color: 'var(--gmail-text-muted)', textDecoration: 'underline' }}>Términos</a>
           </p>
 
         </form>

@@ -1,0 +1,13 @@
+rules_version = '2';
+
+// The app doesn't use Firebase Storage anywhere (no file/attachment uploads) —
+// this denies all access outright so the auto-created default bucket can't be
+// read or written by anyone, instead of relying on whatever default the
+// Firebase console happened to leave it at.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

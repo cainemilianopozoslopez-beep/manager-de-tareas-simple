@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useModalA11y } from '../useModalA11y';
-import { X, Save, Mail, Clock, CheckCircle, Bell, Download, Upload } from 'lucide-react';
+import { X, Save, Clock, CheckCircle, Bell, Download, Upload } from 'lucide-react';
 
 export default function SettingsModal({
   isOpen,
   onClose,
   settings,
+  isGuest = false,
   onSaveSettings,
   onTriggerNotification,
   notificationPermission,
@@ -13,41 +14,38 @@ export default function SettingsModal({
   onExportBackup,
   onImportBackup
 }) {
-  const [notificationMode, setNotificationMode] = useState('browser');
-  const [senderEmail, setSenderEmail] = useState('');
-  const [senderPass, setSenderPass] = useState('');
-  const [recipientEmail, setRecipientEmail] = useState('');
   const [scheduledTime, setScheduledTime] = useState('08:00');
   const [autoSendEnabled, setAutoSendEnabled] = useState(true);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const dialogRef = useRef(null);
+  const savedBannerTimeoutRef = useRef(null);
   useModalA11y(isOpen, onClose, dialogRef);
 
   useEffect(() => {
     if (settings) {
-      setNotificationMode(settings.notificationMode || 'browser');
-      setSenderEmail(settings.senderEmail || '');
-      setSenderPass(settings.senderPass || '');
-      setRecipientEmail(settings.recipientEmail || '');
       setScheduledTime(settings.scheduledTime || '08:00');
       setAutoSendEnabled(settings.autoSendEnabled !== undefined ? settings.autoSendEnabled : true);
     }
   }, [settings, isOpen]);
 
+  useEffect(() => {
+    return () => {
+      if (savedBannerTimeoutRef.current) clearTimeout(savedBannerTimeoutRef.current);
+    };
+  }, []);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isGuest) return;
     await onSaveSettings({
-      notificationMode,
-      senderEmail: senderEmail.trim(),
-      senderPass: senderPass.trim(),
-      recipientEmail: recipientEmail.trim(),
+      notificationMode: 'browser',
       scheduledTime,
       autoSendEnabled
     });
     setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+    savedBannerTimeoutRef.current = setTimeout(() => setSavedSuccess(false), 3000);
   };
 
   return (
@@ -73,7 +71,8 @@ export default function SettingsModal({
         style={{
         width: 'min(580px, 92vw)',
         maxHeight: '90vh',
-        backgroundColor: '#ffffff',
+        backgroundColor: 'var(--gmail-modal-bg)',
+        color: 'var(--gmail-text-primary)',
         borderRadius: '16px',
         boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
         overflow: 'hidden',
@@ -105,112 +104,43 @@ export default function SettingsModal({
         {/* Form Body */}
         <form onSubmit={handleSubmit} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px', overflowY: 'auto' }}>
 
-          {/* Section 1: Mode Selector */}
-          <div>
-            <label style={{ fontSize: '12px', fontWeight: '700', color: 'var(--gmail-text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: '8px', letterSpacing: '0.5px' }}>
-              Modo de Alerta / Envío de Resumen
-            </label>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-              
-              {/* Option: Browser Notification */}
-              <div 
-                onClick={() => setNotificationMode('browser')}
-                style={{
-                  border: notificationMode === 'browser' ? '2px solid #1a73e8' : '1px solid var(--gmail-border)',
-                  backgroundColor: notificationMode === 'browser' ? '#e8f0fe' : '#f8f9fa',
-                  borderRadius: '10px',
-                  padding: '12px',
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  transition: 'all 0.15s'
-                }}
-              >
-                <Bell size={22} color={notificationMode === 'browser' ? '#1a73e8' : '#5f6368'} style={{ marginBottom: '4px' }} />
-                <div style={{ fontSize: '13px', fontWeight: '700', color: notificationMode === 'browser' ? '#1a73e8' : 'var(--gmail-text-primary)' }}>
-                  Escritorio 🔔
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--gmail-text-muted)', marginTop: '2px' }}>
-                  Sin configuración (Recomendado)
-                </div>
-              </div>
-
-              {/* Option: Gmail SMTP */}
-              <div 
-                onClick={() => setNotificationMode('gmail')}
-                style={{
-                  border: notificationMode === 'gmail' ? '2px solid #ea4335' : '1px solid var(--gmail-border)',
-                  backgroundColor: notificationMode === 'gmail' ? '#fce8e6' : '#f8f9fa',
-                  borderRadius: '10px',
-                  padding: '12px',
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  transition: 'all 0.15s'
-                }}
-              >
-                <Mail size={22} color={notificationMode === 'gmail' ? '#ea4335' : '#5f6368'} style={{ marginBottom: '4px' }} />
-                <div style={{ fontSize: '13px', fontWeight: '700', color: notificationMode === 'gmail' ? '#ea4335' : 'var(--gmail-text-primary)' }}>
-                  Correo Gmail 📧
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--gmail-text-muted)', marginTop: '2px' }}>
-                  Requiere credenciales
-                </div>
-              </div>
-
-              {/* Option: Both */}
-              <div 
-                onClick={() => setNotificationMode('both')}
-                style={{
-                  border: notificationMode === 'both' ? '2px solid #137333' : '1px solid var(--gmail-border)',
-                  backgroundColor: notificationMode === 'both' ? '#e6f4ea' : '#f8f9fa',
-                  borderRadius: '10px',
-                  padding: '12px',
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  transition: 'all 0.15s'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', marginBottom: '4px' }}>
-                  <Bell size={18} color={notificationMode === 'both' ? '#137333' : '#5f6368'} />
-                  <Mail size={18} color={notificationMode === 'both' ? '#137333' : '#5f6368'} />
-                </div>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: notificationMode === 'both' ? '#137333' : 'var(--gmail-text-primary)' }}>
-                  Ambos 🔔📧
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--gmail-text-muted)', marginTop: '2px' }}>
-                  Escritorio y Correo
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* Section 2: Fixed Schedule Time */}
+          {/* Section 1: Fixed Schedule Time */}
           <div style={{
-            backgroundColor: '#e6f4ea',
-            border: '1px solid #ceebd6',
+            backgroundColor: 'var(--pulse-q4-bg, #e6f4ea)',
+            border: '1px solid var(--pulse-q4-border, #ceebd6)',
             borderRadius: '12px',
-            padding: '14px'
+            padding: '14px',
+            opacity: isGuest ? 0.6 : 1
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', color: '#137333', fontWeight: '700', fontSize: '13.5px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', color: 'var(--pulse-q4-accent, #137333)', fontWeight: '700', fontSize: '13.5px' }}>
               <Clock size={17} />
               <span>Hora Fijada para Recordatorio Diario</span>
             </div>
-            
+
+            {isGuest && (
+              <p style={{ fontSize: '12px', color: 'var(--pulse-q4-accent, #137333)', margin: '0 0 10px 0' }}>
+                Esto requiere una cuenta registrada — en Modo Invitado no se puede guardar.
+              </p>
+            )}
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <div style={{ flex: 1 }}>
+                <label htmlFor="settings-schedule-time" className="sr-only">Hora de recordatorio diario</label>
                 <input
+                  id="settings-schedule-time"
                   type="time"
                   value={scheduledTime}
                   onChange={(e) => setScheduledTime(e.target.value)}
+                  disabled={isGuest}
                   style={{
                     width: '100%',
                     padding: '8px 12px',
                     borderRadius: '8px',
-                    border: '1px solid #a8dab5',
+                    border: '1px solid var(--pulse-q4-border, #a8dab5)',
                     fontSize: '15px',
                     fontWeight: '700',
-                    color: '#137333'
+                    color: 'var(--pulse-q4-accent, #137333)',
+                    cursor: isGuest ? 'not-allowed' : 'text'
                   }}
                 />
               </div>
@@ -221,9 +151,10 @@ export default function SettingsModal({
                   id="autoSendCheck"
                   checked={autoSendEnabled}
                   onChange={(e) => setAutoSendEnabled(e.target.checked)}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  disabled={isGuest}
+                  style={{ width: '18px', height: '18px', cursor: isGuest ? 'not-allowed' : 'pointer' }}
                 />
-                <label htmlFor="autoSendCheck" style={{ fontSize: '13px', fontWeight: '600', color: '#137333', cursor: 'pointer' }}>
+                <label htmlFor="autoSendCheck" style={{ fontSize: '13px', fontWeight: '600', color: '#137333', cursor: isGuest ? 'not-allowed' : 'pointer' }}>
                   Activar alerta diaria a esta hora
                 </label>
               </div>
@@ -231,10 +162,9 @@ export default function SettingsModal({
           </div>
 
           {/* Browser Permission Panel */}
-          {(notificationMode === 'browser' || notificationMode === 'both') && (
-            <div style={{
-              backgroundColor: notificationPermission === 'granted' ? '#e8f0fe' : '#fef7e0',
-              border: notificationPermission === 'granted' ? '1px solid #d2e3fc' : '1px solid #feefc3',
+          <div style={{
+              backgroundColor: notificationPermission === 'granted' ? 'var(--pulse-active-tab, #e8f0fe)' : 'var(--pulse-hover, #fef7e0)',
+              border: notificationPermission === 'granted' ? '1px solid var(--pulse-border, #d2e3fc)' : '1px solid var(--pulse-border-hover, #feefc3)',
               borderRadius: '12px',
               padding: '12px 16px',
               display: 'flex',
@@ -242,7 +172,7 @@ export default function SettingsModal({
               justifyContent: 'space-between'
             }}>
               <div>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: notificationPermission === 'granted' ? '#1967d2' : '#b06000' }}>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: notificationPermission === 'granted' ? 'var(--pulse-accent, #1967d2)' : 'var(--pulse-q2-accent, #b06000)' }}>
                   {notificationPermission === 'granted' ? '✅ Permiso de notificaciones concedido' : '⚠️ Notificaciones no autorizadas aún'}
                 </div>
                 <div style={{ fontSize: '12px', color: 'var(--gmail-text-secondary)', marginTop: '2px' }}>
@@ -282,78 +212,29 @@ export default function SettingsModal({
                 </button>
               )}
             </div>
-          )}
 
-          {/* Section 3: Gmail SMTP Credentials (If Gmail mode selected) */}
-          {(notificationMode === 'gmail' || notificationMode === 'both') && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '4px', borderTop: '1px solid var(--gmail-border)' }}>
-              <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--gmail-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Credenciales SMTP de Gmail
-              </div>
-
-              {/* Sender Email */}
-              <div>
-                <label style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '4px' }}>
-                  Correo Remitente (Gmail):
-                </label>
-                <input
-                  type="email"
-                  placeholder="ejemplo@gmail.com"
-                  value={senderEmail}
-                  onChange={(e) => setSenderEmail(e.target.value)}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--gmail-border)', fontSize: '13px' }}
-                />
-              </div>
-
-              {/* App Password */}
-              <div>
-                <label style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '4px' }}>
-                  Contraseña de Aplicación de Google (16 caracteres):
-                </label>
-                <input
-                  type="password"
-                  placeholder="xxxx xxxx xxxx xxxx"
-                  value={senderPass}
-                  onChange={(e) => setSenderPass(e.target.value)}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--gmail-border)', fontSize: '13px' }}
-                />
-              </div>
-
-              {/* Recipient Email */}
-              <div>
-                <label style={{ fontSize: '12.5px', fontWeight: '600', color: 'var(--gmail-text-secondary)', display: 'block', marginBottom: '4px' }}>
-                  Correo Destinatario:
-                </label>
-                <input
-                  type="email"
-                  placeholder="destinatario@gmail.com"
-                  value={recipientEmail}
-                  onChange={(e) => setRecipientEmail(e.target.value)}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--gmail-border)', fontSize: '13px' }}
-                />
-              </div>
-
-            </div>
-          )}
-
-          {/* Section 4: Backup / Restore */}
+          {/* Section 2: Backup / Restore */}
           <div style={{
-            backgroundColor: '#f8f9fa',
+            backgroundColor: 'var(--gmail-hover)',
             border: '1px solid var(--gmail-border)',
             borderRadius: '12px',
-            padding: '14px'
+            padding: '14px',
+            opacity: isGuest ? 0.6 : 1
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', color: 'var(--gmail-text-primary)', fontWeight: '700', fontSize: '13.5px' }}>
               <Download size={17} color="var(--gmail-blue)" />
               <span>Respaldo de Datos</span>
             </div>
             <p style={{ fontSize: '11.5px', color: 'var(--gmail-text-secondary)', margin: '0 0 10px 0' }}>
-              Descarga una copia de tus tareas, ajustes y cuenta. Guárdala en un lugar seguro (el archivo incluye tu contraseña).
+              {isGuest
+                ? 'Esto requiere una cuenta registrada — en Modo Invitado no hay nada que respaldar en la nube.'
+                : 'Descarga una copia de tus tareas y ajustes en un archivo. Guárdala en un lugar seguro.'}
             </p>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <button
                 type="button"
                 onClick={onExportBackup}
+                disabled={isGuest}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -363,7 +244,8 @@ export default function SettingsModal({
                   padding: '7px 14px',
                   borderRadius: '16px',
                   fontSize: '12.5px',
-                  fontWeight: '700'
+                  fontWeight: '700',
+                  cursor: isGuest ? 'not-allowed' : 'pointer'
                 }}
               >
                 <Download size={14} />
@@ -381,7 +263,7 @@ export default function SettingsModal({
                   borderRadius: '16px',
                   fontSize: '12.5px',
                   fontWeight: '700',
-                  cursor: 'pointer'
+                  cursor: isGuest ? 'not-allowed' : 'pointer'
                 }}
               >
                 <Upload size={14} />
@@ -389,6 +271,7 @@ export default function SettingsModal({
                 <input
                   type="file"
                   accept="application/json"
+                  disabled={isGuest}
                   style={{ display: 'none' }}
                   onChange={(e) => {
                     const file = e.target.files[0];
@@ -424,7 +307,7 @@ export default function SettingsModal({
                 borderRadius: '18px',
                 fontSize: '13px',
                 color: 'var(--gmail-text-secondary)',
-                backgroundColor: '#f1f3f4'
+                backgroundColor: 'var(--gmail-hover)'
               }}
             >
               Cancelar
@@ -432,16 +315,19 @@ export default function SettingsModal({
             
             <button
               type="submit"
+              disabled={isGuest}
+              title={isGuest ? 'Requiere una cuenta registrada' : undefined}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                backgroundColor: 'var(--gmail-red)',
-                color: '#ffffff',
+                backgroundColor: isGuest ? 'var(--gmail-hover)' : 'var(--gmail-blue)',
+                color: isGuest ? 'var(--gmail-text-muted)' : '#ffffff',
                 padding: '8px 22px',
                 borderRadius: '18px',
                 fontSize: '13px',
-                fontWeight: '600'
+                fontWeight: '600',
+                cursor: isGuest ? 'not-allowed' : 'pointer'
               }}
             >
               <Save size={15} />
