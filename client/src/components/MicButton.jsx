@@ -14,6 +14,13 @@ const ERROR_MESSAGES = {
   'network': 'Error de red al reconocer voz'
 };
 
+// getUserMedia error names: https://developer.mozilla.org/docs/Web/API/MediaDevices/getUserMedia#exceptions
+const PERMISSION_ERROR_MESSAGES = {
+  NotAllowedError: 'Permiso de micrófono denegado',
+  NotFoundError: 'No se encontró micrófono',
+  NotReadableError: 'El micrófono está en uso por otra app'
+};
+
 // Dictation button backed by the browser's native Web Speech API — no server,
 // no API key, no cost. Unsupported browsers (Firefox, most non-Chromium
 // engines) get no button at all rather than a broken one.
@@ -23,13 +30,17 @@ export default function MicButton({ onResult, label = 'Dictar por voz', lang = '
   const recognitionRef = useRef(null);
   const errorTimeoutRef = useRef(null);
 
+  const showError = useCallback((message) => {
+    if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+    setError(message);
+    errorTimeoutRef.current = setTimeout(() => setError(null), 3500);
+  }, []);
+
   const stop = useCallback(() => {
     recognitionRef.current?.stop();
   }, []);
 
-  const start = useCallback(() => {
-    if (!SpeechRecognitionAPI || listening) return;
-    setError(null);
+  const startRecognition = useCallback(() => {
     const recognition = new SpeechRecognitionAPI();
     recognition.lang = lang;
     recognition.continuous = false;
@@ -43,18 +54,31 @@ export default function MicButton({ onResult, label = 'Dictar por voz', lang = '
         .trim();
       if (text) onResult(text);
     };
-    recognition.onerror = (e) => {
-      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
-      setError(ERROR_MESSAGES[e.error] || 'No se pudo reconocer la voz');
-      errorTimeoutRef.current = setTimeout(() => setError(null), 3500);
-    };
+    recognition.onerror = (e) => showError(ERROR_MESSAGES[e.error] || 'No se pudo reconocer la voz');
     // onend always fires after onerror, so a single place clears the listening state.
     recognition.onend = () => setListening(false);
 
     recognitionRef.current = recognition;
-    setListening(true);
     recognition.start();
-  }, [lang, listening, onResult]);
+  }, [lang, onResult, showError]);
+
+  const start = useCallback(async () => {
+    if (!SpeechRecognitionAPI || listening) return;
+    setError(null);
+    setListening(true);
+    // Ask for mic access up front via getUserMedia, same idea as the app's
+    // notification-permission flow: an explicit request with clear
+    // grant/deny feedback, instead of letting SpeechRecognition fail silently
+    // when the browser already has the permission blocked.
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop());
+      startRecognition();
+    } catch (err) {
+      setListening(false);
+      showError(PERMISSION_ERROR_MESSAGES[err.name] || 'No se pudo acceder al micrófono');
+    }
+  }, [listening, startRecognition, showError]);
 
   if (!SpeechRecognitionAPI) return null;
 
