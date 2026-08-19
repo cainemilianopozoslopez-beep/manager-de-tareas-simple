@@ -12,6 +12,7 @@ import {
   BarChart2
 } from 'lucide-react';
 import UserMenu from './UserMenu';
+import MicButton from './MicButton';
 
 export default function PulseHeader({
   searchQuery,
@@ -145,7 +146,7 @@ export default function PulseHeader({
               width: '100%',
               height: '40px',
               paddingLeft: '40px',
-              paddingRight: searchQuery ? '36px' : '65px',
+              paddingRight: searchQuery ? '66px' : '95px',
               borderRadius: '20px',
               border: '1px solid var(--pulse-border)',
               backgroundColor: 'var(--pulse-sidebar-bg)',
@@ -154,6 +155,12 @@ export default function PulseHeader({
               outline: 'none',
               transition: 'border-color 0.2s, box-shadow 0.2s'
             }}
+          />
+          <MicButton
+            onResult={(text) => onSearchChange(text)}
+            label="Buscar por voz"
+            size={15}
+            style={{ position: 'absolute', right: '40px', top: '50%', transform: 'translateY(-50%)' }}
           />
           {searchQuery ? (
             <button

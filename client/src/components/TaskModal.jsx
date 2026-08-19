@@ -2,6 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Save, Clock, Calendar, Repeat, Plus, CheckSquare, Square, ListChecks } from 'lucide-react';
 import { getTodayStr, dateStrDaysFromToday } from '../taskUtils';
 import { useModalA11y } from '../useModalA11y';
+import MicButton from './MicButton';
+
+// Appends dictated text to whatever's already in the field, rather than
+// replacing it — dictation is meant to add to typed content, not clobber it.
+const appendDictated = (prev, text) => (prev.trim() ? `${prev.trim()} ${text}` : text);
 
 const DATE_PRESETS = [
   { label: 'Hoy', days: 0 },
@@ -145,7 +150,7 @@ export default function TaskModal({
       <form onSubmit={handleSubmit} style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
         
         {/* Title Input */}
-        <div>
+        <div style={{ position: 'relative' }}>
           <input
             type="text"
             placeholder="Título de la tarea..."
@@ -159,10 +164,15 @@ export default function TaskModal({
               fontWeight: '600',
               border: 'none',
               borderBottom: '2px solid var(--gmail-border)',
-              padding: '8px 0',
+              padding: '8px 32px 8px 0',
               backgroundColor: 'transparent',
               color: 'var(--gmail-text-primary)'
             }}
+          />
+          <MicButton
+            onResult={(text) => setTitle(prev => appendDictated(prev, text))}
+            label="Dictar título por voz"
+            style={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)' }}
           />
         </div>
 
@@ -324,7 +334,7 @@ export default function TaskModal({
         </p>
 
         {/* Description Textarea */}
-        <div>
+        <div style={{ position: 'relative' }}>
           <textarea
             placeholder="Añade detalles o notas adicionales para esta tarea..."
             rows={4}
@@ -333,6 +343,7 @@ export default function TaskModal({
             style={{
               width: '100%',
               padding: '10px',
+              paddingRight: '34px',
               borderRadius: '8px',
               border: '1px solid var(--gmail-border)',
               backgroundColor: 'var(--gmail-bg)',
@@ -340,6 +351,11 @@ export default function TaskModal({
               color: 'var(--gmail-text-primary)',
               resize: 'vertical'
             }}
+          />
+          <MicButton
+            onResult={(text) => setDescription(prev => appendDictated(prev, text))}
+            label="Dictar descripción por voz"
+            style={{ position: 'absolute', right: '8px', top: '8px' }}
           />
         </div>
 

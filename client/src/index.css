@@ -224,6 +224,15 @@ input, textarea, select {
   animation: spin 0.8s linear infinite;
 }
 
+@keyframes micPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); }
+  50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+}
+
+.mic-btn-listening {
+  animation: micPulse 1.3s ease-in-out infinite;
+}
+
 /* Login screen alert banners */
 .login-alert-error {
   background-color: #fce8e6;
