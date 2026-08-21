@@ -26,6 +26,7 @@ import {
   deleteUserAccount,
   logoutUser
 } from './firebase';
+import { isPushSupported, getExistingPushSubscription, subscribeToPush, unsubscribeFromPush } from './push';
 
 const BASE_CATEGORIES = ['trabajo', 'personal', 'urgente', 'ideas', 'general'];
 
@@ -114,6 +115,9 @@ export default function App() {
   const [notificationPermission, setNotificationPermission] = useState(
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default'
   );
+
+  // Web Push subscription for this device/browser (null = not subscribed).
+  const [pushSubscription, setPushSubscription] = useState(null);
 
   // Modals
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -296,6 +300,74 @@ export default function App() {
       console.error('Error al pedir permisos:', err);
     }
   }, [showToast]);
+
+  // Web Push: separate from the Notification permission above — this is the
+  // part that lets alerts arrive with every tab of the app closed. Requires
+  // both the Notification permission (requested here if missing) AND a
+  // PushManager subscription persisted to Firestore so the backend knows
+  // where to deliver to.
+  const enablePushNotifications = useCallback(async () => {
+    if (!isPushSupported()) {
+      showToast('Este navegador no soporta notificaciones push', 'error');
+      return;
+    }
+    if (user?.isGuest) {
+      showToast('El modo invitado no guarda datos en la nube — inicia sesión para usar push', 'error');
+      return;
+    }
+    try {
+      if (Notification.permission !== 'granted') {
+        const permission = await Notification.requestPermission();
+        setNotificationPermission(permission);
+        if (permission !== 'granted') {
+          showToast('⚠️ Permiso de notificaciones denegado', 'error');
+          return;
+        }
+      }
+      const subscription = await subscribeToPush(user.uid);
+      setPushSubscription(subscription);
+      showToast('🔔 Notificaciones push activadas en este dispositivo');
+    } catch (err) {
+      console.error('Error al activar push:', err);
+      showToast('No se pudo activar el push: ' + err.message, 'error');
+    }
+  }, [user, showToast]);
+
+  const disablePushNotifications = useCallback(async () => {
+    if (!user || user.isGuest) return;
+    try {
+      await unsubscribeFromPush(user.uid);
+      setPushSubscription(null);
+      showToast('Notificaciones push desactivadas en este dispositivo');
+    } catch (err) {
+      console.error('Error al desactivar push:', err);
+      showToast('No se pudo desactivar el push', 'error');
+    }
+  }, [user, showToast]);
+
+  // Load any existing subscription for this device on login (so the Settings
+  // panel reflects reality instead of always starting "off"), and listen for
+  // the SW's push-received side-channel message (see public/sw.js) purely so
+  // we have something observable in the page console while testing.
+  useEffect(() => {
+    if (!user || user.isGuest || !isPushSupported()) {
+      setPushSubscription(null);
+      return;
+    }
+    let cancelled = false;
+    getExistingPushSubscription().then((sub) => { if (!cancelled) setPushSubscription(sub); });
+
+    const onMessage = (event) => {
+      if (event.data?.type === 'push-received') {
+        console.log('[push] recibido:', event.data.title, '-', event.data.body);
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => {
+      cancelled = true;
+      navigator.serviceWorker.removeEventListener('message', onMessage);
+    };
+  }, [user]);
 
   // Dispatch Native Web Notification
   const triggerBrowserNotification = useCallback((isManualTest = true) => {
@@ -1117,6 +1189,10 @@ export default function App() {
         onTriggerNotification={triggerBrowserNotification}
         notificationPermission={notificationPermission}
         onRequestPermission={requestNotificationPermission}
+        pushSupported={isPushSupported()}
+        pushSubscribed={Boolean(pushSubscription)}
+        onEnablePush={enablePushNotifications}
+        onDisablePush={disablePushNotifications}
         onExportBackup={handleExportBackup}
         onImportBackup={handleImportBackup}
       />

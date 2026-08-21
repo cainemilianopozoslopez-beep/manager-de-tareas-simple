@@ -11,6 +11,10 @@ export default function SettingsModal({
   onTriggerNotification,
   notificationPermission,
   onRequestPermission,
+  pushSupported = false,
+  pushSubscribed = false,
+  onEnablePush,
+  onDisablePush,
   onExportBackup,
   onImportBackup
 }) {
@@ -212,6 +216,69 @@ export default function SettingsModal({
                 </button>
               )}
             </div>
+
+          {/* Push Notifications Panel — works even with every tab closed, unlike the
+              browser-permission panel above (which only fires while a tab is open). */}
+          {pushSupported && (
+            <div style={{
+                backgroundColor: pushSubscribed ? 'var(--pulse-active-tab, #e8f0fe)' : 'var(--pulse-hover, #fef7e0)',
+                border: pushSubscribed ? '1px solid var(--pulse-border, #d2e3fc)' : '1px solid var(--pulse-border-hover, #feefc3)',
+                borderRadius: '12px',
+                padding: '12px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                opacity: isGuest ? 0.6 : 1
+              }}>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: pushSubscribed ? 'var(--pulse-accent, #1967d2)' : 'var(--pulse-q2-accent, #b06000)' }}>
+                    {pushSubscribed ? '✅ Push activado en este dispositivo' : '📲 Notificaciones push (funcionan con la app cerrada)'}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--gmail-text-secondary)', marginTop: '2px' }}>
+                    {isGuest
+                      ? 'Inicia sesión (no invitado) para poder usar push.'
+                      : pushSubscribed
+                        ? 'Este navegador recibirá alertas de tareas aunque la pestaña esté cerrada.'
+                        : 'A diferencia de las de arriba, estas llegan aunque cierres la pestaña.'}
+                  </div>
+                </div>
+
+                {!isGuest && (
+                  pushSubscribed ? (
+                    <button
+                      type="button"
+                      onClick={onDisablePush}
+                      style={{
+                        backgroundColor: 'var(--gmail-hover)',
+                        color: 'var(--gmail-text-secondary)',
+                        padding: '6px 12px',
+                        borderRadius: '14px',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        border: '1px solid var(--gmail-border)'
+                      }}
+                    >
+                      Desactivar
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={onEnablePush}
+                      style={{
+                        backgroundColor: '#f29900',
+                        color: '#ffffff',
+                        padding: '6px 12px',
+                        borderRadius: '14px',
+                        fontSize: '12px',
+                        fontWeight: '700'
+                      }}
+                    >
+                      Activar 📲
+                    </button>
+                  )
+                )}
+              </div>
+          )}
 
           {/* Section 2: Backup / Restore */}
           <div style={{
