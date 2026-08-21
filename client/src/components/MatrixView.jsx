@@ -342,6 +342,9 @@ export default function MatrixView({
                       onToggleSubtask={onToggleSubtask}
                       selected={selectedIds.has(task.id)}
                       onToggleSelect={onToggleSelect}
+                      onMoveToQuadrant={onMoveToQuadrant}
+                      currentQuadrantId={q.id}
+                      quadrants={QUADRANTS}
                     />
                   ))
                 )}

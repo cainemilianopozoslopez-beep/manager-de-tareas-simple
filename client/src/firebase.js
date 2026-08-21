@@ -217,23 +217,44 @@ export const exportUserBackup = async (userId, userInfo, settings) => {
   };
 };
 
+// Firestore hard-caps a batch at 500 writes; stay comfortably under that so the
+// settings doc always fits in whichever chunk it lands in.
+const BATCH_CHUNK_SIZE = 450;
+
 // Restores a previously exported backup: overwrites/creates each task by id and
-// merges the settings doc. Runs as one atomic batch.
+// merges the settings doc. Split across multiple sequential batches (Firestore
+// batches are capped at 500 writes — a single batch silently failed past that,
+// and the caller had no way to tell that apart from a corrupt file).
 export const importUserBackup = async (userId, backup) => {
   if (!db || !userId) throw new Error('Firestore no está configurado');
   const tasks = Array.isArray(backup?.tasks) ? backup.tasks : [];
-  const batch = writeBatch(db);
-  tasks.forEach(t => {
-    const { id, ...rest } = t;
-    const ref = id
-      ? doc(db, 'users', userId, 'tasks', id)
-      : doc(userTasksRef(userId));
-    batch.set(ref, { ...rest, updatedAt: new Date().toISOString() });
-  });
-  if (backup?.settings && userId) {
-    batch.set(doc(db, 'users', userId, 'settings', 'main'), backup.settings, { merge: true });
+
+  for (let i = 0; i < tasks.length; i += BATCH_CHUNK_SIZE) {
+    const chunk = tasks.slice(i, i + BATCH_CHUNK_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach(t => {
+      const { id, ...rest } = t;
+      const ref = id
+        ? doc(db, 'users', userId, 'tasks', id)
+        : doc(userTasksRef(userId));
+      batch.set(ref, { ...rest, updatedAt: new Date().toISOString() });
+    });
+    // Piggyback the settings doc on the last chunk so it's still one write
+    // per chunk under the cap, not an extra batch just for one document.
+    if (backup?.settings && i + BATCH_CHUNK_SIZE >= tasks.length) {
+      batch.set(doc(db, 'users', userId, 'settings', 'main'), backup.settings, { merge: true });
+    }
+    await batch.commit();
   }
-  await batch.commit();
+
+  // No tasks in the file, but there's a settings doc to restore — the loop
+  // above never ran, so commit it on its own.
+  if (tasks.length === 0 && backup?.settings) {
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'users', userId, 'settings', 'main'), backup.settings, { merge: true });
+    await batch.commit();
+  }
+
   return tasks.length;
 };
 

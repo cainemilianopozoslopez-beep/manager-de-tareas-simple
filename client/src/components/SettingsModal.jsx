@@ -43,11 +43,17 @@ export default function SettingsModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isGuest) return;
-    await onSaveSettings({
-      notificationMode: 'browser',
-      scheduledTime,
-      autoSendEnabled
-    });
+    try {
+      await onSaveSettings({
+        notificationMode: 'browser',
+        scheduledTime,
+        autoSendEnabled
+      });
+    } catch {
+      // onSaveSettings already showed the error toast — just skip the success
+      // banner below instead of showing it regardless of whether this failed.
+      return;
+    }
     setSavedSuccess(true);
     savedBannerTimeoutRef.current = setTimeout(() => setSavedSuccess(false), 3000);
   };

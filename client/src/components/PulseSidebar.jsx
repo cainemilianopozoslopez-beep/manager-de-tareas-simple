@@ -30,7 +30,7 @@ export default function PulseSidebar({
     { id: 'matrix-view', label: 'Matriz 2x2 de Prioridades', icon: LayoutGrid, isMatrixViewBtn: true },
     { id: 'calendar-view', label: 'Vista de Calendario', icon: CalendarDays, view: 'calendar' },
     { id: 'stats-view', label: 'Métricas', icon: BarChart2, view: 'stats' },
-    { id: 'inbox', label: 'Bandeja Principal', icon: Inbox, countKey: 'inbox' },
+    { id: 'inbox', label: 'Bandeja Principal', icon: Inbox, countKey: 'pending' },
     { id: 'today', label: 'Para Hoy', icon: Sun, countKey: 'today' },
     { id: 'overdue', label: 'Tareas Vencidas', icon: AlertTriangle, countKey: 'overdue', badgeColor: '#ef4444' },
     { id: 'week', label: 'Esta Semana', icon: Clock, countKey: 'week' },

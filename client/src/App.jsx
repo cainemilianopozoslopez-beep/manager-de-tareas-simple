@@ -106,6 +106,10 @@ export default function App() {
   // value, so we don't fire a server round-trip per character.
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(false);
+  // Sticks (unlike the transient toast) until a snapshot succeeds again — the
+  // toast alone is easy to miss, and on a cold/offline first load there's no
+  // cached data yet, so the board otherwise looks like it lost everything.
+  const [firestoreError, setFirestoreError] = useState(false);
   const [toast, setToast] = useState(null);
 
   // Bulk selection: ids of tasks currently checked for a batch action.
@@ -421,12 +425,38 @@ export default function App() {
         const advanced = advanceRecurringTasks(firestoreTasks);
         setAllTasks(advanced);
         setLoading(false);
+        setFirestoreError(false);
+
+        // advanceRecurringTasks only changes dueDate in the in-memory copy —
+        // it never used to reach Firestore, so a recurring task's stored
+        // dueDate stayed on its very first occurrence forever. That silently
+        // broke reminders for it (the GitHub Actions push job reads dueDate
+        // straight from Firestore, with no idea this client-side rollover
+        // logic exists, so it could never match "due today" again). Persist
+        // whichever tasks actually rolled forward so the stored date matches
+        // what's on screen. Safe to fire-and-forget: once written, the next
+        // snapshot echo has dueDate >= today, so advanceRecurringTasks no
+        // longer flags it and this doesn't loop.
+        if (advanced !== firestoreTasks) {
+          const byId = new Map(firestoreTasks.map(t => [t.id, t]));
+          advanced.forEach(t => {
+            const original = byId.get(t.id);
+            if (original && original.dueDate !== t.dueDate) {
+              updateFirebaseTask(user.uid, t.id, { dueDate: t.dueDate, done: false }).catch(err => {
+                console.error('Error al persistir avance de recurrencia:', err);
+              });
+            }
+          });
+        }
       },
       () => {
         // Keep whatever tasks were last loaded instead of wiping them to
         // empty — a subscription error is usually transient (network blip),
-        // not "you have zero tasks now".
+        // not "you have zero tasks now". If this is the very first load
+        // (nothing cached yet), the board still ends up empty — firestoreError
+        // renders a persistent banner for that case instead of only a 4s toast.
         setLoading(false);
+        setFirestoreError(true);
         showToast('No se pudo conectar con el servidor. Tus tareas visibles pueden no estar actualizadas.', 'error');
       }
     );
@@ -857,6 +887,9 @@ export default function App() {
     } catch (err) {
       console.error('Error al guardar la configuración:', err);
       showToast('Error al guardar configuración', 'error');
+      // Re-thrown so SettingsModal's handleSubmit sees the failure and skips
+      // its own "guardado" success banner instead of showing it unconditionally.
+      throw err;
     }
   };
 
@@ -900,15 +933,25 @@ export default function App() {
     );
     if (!confirmed) return;
 
+    let parsed;
     try {
-      const text = await file.text();
-      const parsed = JSON.parse(text);
+      parsed = JSON.parse(await file.text());
+    } catch (err) {
+      console.error('Error al leer el archivo de respaldo:', err);
+      showToast('El archivo no es un respaldo JSON válido', 'error');
+      return;
+    }
+
+    try {
       const count = await importUserBackup(user.uid, parsed);
       showToast(`Respaldo restaurado: ${count} tareas`, 'success');
       fetchSettings();
     } catch (err) {
-      console.error('Error al restaurar el respaldo:', err);
-      showToast('El archivo no es un respaldo JSON válido', 'error');
+      // Distinct from the JSON.parse failure above: the file was valid, the
+      // restore itself failed (network, permissions, a Firestore limit) — telling
+      // the user "invalid file" here would send them chasing the wrong problem.
+      console.error('Error al restaurar el respaldo en Firestore:', err);
+      showToast('Error al restaurar el respaldo: ' + err.message, 'error');
     }
   };
 
@@ -920,9 +963,17 @@ export default function App() {
     } else if (targetQuadrant === 'q2') {
       updates = { priority: 'alta', dueDate: dateStrDaysFromToday(3) };
     } else if (targetQuadrant === 'q3') {
-      updates = { priority: 'media', dueDate: today };
+      // getEisenhowerQuadrant treats `starred` as "important" regardless of
+      // priority — without clearing it, a starred task dropped here silently
+      // stays in Q1/Q2 (wrong quadrant, but the toast still said "moved").
+      updates = { priority: 'media', dueDate: today, starred: false };
     } else if (targetQuadrant === 'q4') {
-      updates = { priority: 'baja' };
+      // Q4 also needs "not urgent" (getEisenhowerQuadrant checks dueDate <=
+      // tomorrow), not just "not important" — a task dropped here that was
+      // already due today/tomorrow stayed urgent-by-date and landed in Q3
+      // instead. Clearing the due date/time is the honest read of "Revisar":
+      // no urgency, review whenever, rather than picking an arbitrary future date.
+      updates = { priority: 'baja', starred: false, dueDate: null, dueTime: null };
     }
 
     if (user?.isGuest) {
@@ -1000,6 +1051,19 @@ export default function App() {
     trash: filterByTab(countsBase, 'trash').length
   };
 
+  // Same category/search-filtered set, reused as the `tasks` prop for Matrix,
+  // Calendar and Stats — previously only the List view honored the search bar
+  // and category filter, so searching while on any other view silently did
+  // nothing and looked broken. Deliberately NOT also filtering by `currentTab`
+  // here: that's a List-specific "which folder" concept (e.g. Papelera), while
+  // these three views are meant to show one global picture.
+  const globallyFilteredTasks = countsBase;
+
+  // "Progreso de hoy" / Pulso Diario ring: tasks actually due today, not the
+  // account's entire all-time completion ratio (what visibleAllTasks would give).
+  const todayStrForProgress = getTodayStr();
+  const todaysTasksForProgress = visibleAllTasks.filter(t => !t.trash && t.dueDate === todayStrForProgress);
+
   // Categories are a free-text field server-side; surface whatever custom values are in use
   // alongside the defaults, so the sidebar filter and the task form both offer them.
   const customCategories = Array.from(
@@ -1074,9 +1138,26 @@ export default function App() {
         onToggleSidebar={() => setIsSidebarOpen(open => !open)}
         activeView={activeView}
         onChangeView={setActiveView}
-        completedCount={visibleAllTasks.filter(t => !t.trash && t.done).length}
-        totalCount={visibleAllTasks.filter(t => !t.trash).length}
+        completedCount={todaysTasksForProgress.filter(t => t.done).length}
+        totalCount={todaysTasksForProgress.length}
       />
+
+      {/* Persistent offline/connection banner — stays up (unlike the 4s toast)
+          until a Firestore snapshot succeeds again. */}
+      {firestoreError && (
+        <div style={{
+          backgroundColor: '#fef7e0',
+          color: '#7a5c00',
+          borderBottom: '1px solid #f2c94c',
+          padding: '8px 20px',
+          fontSize: '13px',
+          fontWeight: '600',
+          textAlign: 'center',
+          flexShrink: 0
+        }}>
+          ⚠️ Sin conexión con el servidor — mostrando lo último guardado, puede no estar actualizado.
+        </div>
+      )}
 
       {/* Main App Body */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -1100,7 +1181,7 @@ export default function App() {
           <>
           <MatrixOnboarding />
           <MatrixView
-            tasks={visibleAllTasks}
+            tasks={globallyFilteredTasks}
             loading={loading}
             onToggleDone={handleToggleDone}
             onToggleStar={handleToggleStar}
@@ -1120,10 +1201,10 @@ export default function App() {
           />
           </>
         ) : activeView === 'stats' ? (
-          <StatsDashboard tasks={visibleAllTasks} />
+          <StatsDashboard tasks={globallyFilteredTasks} />
         ) : activeView === 'calendar' ? (
           <CalendarView
-            tasks={visibleAllTasks}
+            tasks={globallyFilteredTasks}
             onEdit={(task) => {
               setComposeDate(null);
               setEditingTask(task);

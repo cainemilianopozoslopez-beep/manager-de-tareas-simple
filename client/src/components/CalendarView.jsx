@@ -12,6 +12,8 @@ export default function CalendarView({ tasks, onEdit, onCompose }) {
     const d = new Date(todayStr + 'T00:00:00');
     return { y: d.getFullYear(), m: d.getMonth() };
   });
+  // Which day's "+N más" overflow popover is open (at most one at a time).
+  const [expandedDay, setExpandedDay] = useState(null);
 
   // Bucket non-trashed, dated tasks by their due date.
   const byDate = {};
@@ -81,13 +83,13 @@ export default function CalendarView({ tasks, onEdit, onCompose }) {
               key={idx}
               className="calendar-cell"
               onClick={() => {
-                if (window.confirm(`¿Crear una tarea para el día ${cell.dateStr}?`)) {
-                  onCompose?.(cell.dateStr);
-                }
+                setExpandedDay(null);
+                onCompose?.(cell.dateStr);
               }}
               title="Clic para crear una tarea en este día"
               style={{
                 minWidth: 0,
+                position: 'relative',
                 borderRight: (idx % 7 !== 6) ? '1px solid var(--gmail-border)' : 'none',
                 borderBottom: '1px solid var(--gmail-border)',
                 minHeight: '92px',
@@ -135,13 +137,71 @@ export default function CalendarView({ tasks, onEdit, onCompose }) {
               ))}
 
               {dayTasks.length > MAX_CHIPS && (
-                <span
-                  onClick={(e) => e.stopPropagation()}
-                  title={dayTasks.slice(MAX_CHIPS).map(t => t.title).join('\n')}
-                  style={{ fontSize: '10px', fontWeight: '600', color: 'var(--gmail-text-muted)', paddingLeft: '5px', cursor: 'default' }}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedDay(prev => (prev === cell.dateStr ? null : cell.dateStr));
+                  }}
+                  style={{
+                    fontSize: '10px',
+                    fontWeight: '600',
+                    color: 'var(--pulse-accent, #1a73e8)',
+                    padding: '0 0 0 5px',
+                    textAlign: 'left',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}
                 >
                   +{dayTasks.length - MAX_CHIPS} más
-                </span>
+                </button>
+              )}
+
+              {expandedDay === cell.dateStr && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    marginTop: '4px',
+                    backgroundColor: 'var(--gmail-modal-bg)',
+                    border: '1px solid var(--gmail-border)',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                    padding: '6px',
+                    zIndex: 20,
+                    minWidth: '190px',
+                    maxHeight: '220px',
+                    overflowY: 'auto',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '2px'
+                  }}
+                >
+                  {dayTasks.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => { setExpandedDay(null); onEdit?.(t); }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        textAlign: 'left',
+                        fontSize: '11.5px',
+                        color: 'var(--gmail-text-primary)',
+                        padding: '5px 8px',
+                        borderRadius: '5px',
+                        textDecoration: t.done ? 'line-through' : 'none',
+                        opacity: t.done ? 0.6 : 1
+                      }}
+                    >
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0, backgroundColor: CATEGORY_COLORS[(t.category || 'general').toLowerCase()] || '#5f6368' }} />
+                      {t.dueTime ? `${t.dueTime} ` : ''}{t.title}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           );

@@ -3,24 +3,25 @@ import { X, Move, MousePointer2 } from 'lucide-react';
 
 const STORAGE_KEY = 'pulse_matrix_onboarding_dismissed';
 
+// No step here actually points at/highlights the real UI element it
+// describes — this is a plain centered dialog, not a guided tour. Keep the
+// copy honest about what exists instead of promising a spotlight that isn't
+// there.
 const STEPS = [
   {
     title: 'Bienvenido a la Matriz de Eisenhower',
     text: 'Esta cuadrícula organiza tus tareas automáticamente según su urgencia e importancia.',
-    icon: null,
-    highlight: 'matrix-header'
+    icon: null
   },
   {
     title: 'Arrastra para reorganizar',
-    text: 'Puedes mover tareas entre cuadrantes simplemente arrastrándolas.',
-    icon: Move,
-    highlight: 'quadrant'
+    text: 'En computadora, arrastra una tarjeta a otro cuadrante para moverla. En el celular, usa el botón de mover (→) de cada tarjeta — el arrastre no funciona con el dedo.',
+    icon: Move
   },
   {
     title: 'Haz clic para crear',
-    text: 'Usa el botón "+ Nueva Tarea" o arrastra desde el cuadrante que prefieras.',
-    icon: MousePointer2,
-    highlight: 'compose-btn'
+    text: 'Usa el botón "+ Nueva Tarea" o el "+" de la esquina de cualquier cuadrante.',
+    icon: MousePointer2
   }
 ];
 

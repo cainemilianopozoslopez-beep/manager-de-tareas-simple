@@ -11,7 +11,8 @@ import {
   ListChecks,
   CheckSquare,
   Square,
-  GripVertical
+  GripVertical,
+  MoveRight
 } from 'lucide-react';
 import { getEffectivePriority, getTodayStr } from '../taskUtils';
 
@@ -27,10 +28,17 @@ export default function TaskItem({
   onDelete,
   selected = false,
   onToggleSelect,
-  onToggleSubtask
+  onToggleSubtask,
+  // Only passed from MatrixView — the HTML5 drag between quadrants doesn't
+  // work on touch at all, so this button is the only way to move a task on
+  // mobile (and doubles as a keyboard-accessible alternative on desktop).
+  onMoveToQuadrant,
+  currentQuadrantId,
+  quadrants
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
+  const [showMoveMenu, setShowMoveMenu] = useState(false);
 
   const getPriorityBadgeClass = (p) => {
     switch (p) {
@@ -408,14 +416,79 @@ export default function TaskItem({
         </div>
       </div>
 
-      {/* Hover Action Buttons (Edit, Delete) */}
+      {/* Hover Action Buttons (Move, Edit, Delete) */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
         gap: '4px',
-        opacity: isHovered ? 1 : 0.4,
-        transition: 'opacity 0.15s ease'
+        opacity: isHovered || showMoveMenu ? 1 : 0.4,
+        transition: 'opacity 0.15s ease',
+        position: 'relative'
       }}>
+        {onMoveToQuadrant && (
+          <>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMoveMenu(prev => !prev);
+              }}
+              aria-label="Mover a otro cuadrante"
+              title="Mover a otro cuadrante"
+              style={{
+                padding: '10px',
+                borderRadius: '8px',
+                color: 'var(--pulse-text-secondary)',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
+              <MoveRight size={15} />
+            </button>
+
+            {showMoveMenu && (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '4px',
+                  backgroundColor: 'var(--gmail-modal-bg)',
+                  border: '1px solid var(--gmail-border)',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                  padding: '6px',
+                  zIndex: 20,
+                  minWidth: '170px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2px'
+                }}
+              >
+                {quadrants.filter(q => q.id !== currentQuadrantId).map(q => (
+                  <button
+                    key={q.id}
+                    onClick={() => {
+                      setShowMoveMenu(false);
+                      onMoveToQuadrant(task.id, q.id);
+                    }}
+                    style={{
+                      textAlign: 'left',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      color: q.colorVar,
+                      padding: '6px 8px',
+                      borderRadius: '5px'
+                    }}
+                  >
+                    Mover a "{q.title}"
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
         <button
           onClick={(e) => {
             e.stopPropagation();

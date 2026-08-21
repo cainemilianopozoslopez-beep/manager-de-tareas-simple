@@ -16,7 +16,13 @@ export const getTodayStr = (d = new Date()) => {
   return `${y}-${m}-${day}`;
 };
 
-// ---- Recurrence (guest mode only; registered users are advanced server-side) ----
+// ---- Recurrence ----
+// Used for both guest and registered users. Guests: the result is what gets
+// mirrored to localStorage, so it's already the persisted copy. Registered
+// users: App.jsx calls this on every Firestore snapshot to compute what's
+// shown, then separately writes back to Firestore any task whose dueDate
+// this actually rolled forward — this file has no Firestore access itself,
+// it only computes the new dates.
 
 // Rolls a recurring task's dueDate forward (daily/weekly/monthly) until it lands on
 // today or later.
