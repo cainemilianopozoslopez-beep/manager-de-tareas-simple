@@ -2,24 +2,8 @@
   "firestore": {
     "rules": "firestore.rules"
   },
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "ignore": [
-        "node_modules",
-        ".git",
-        "*.log"
-      ]
-    }
-  ],
   "storage": {
     "rules": "storage.rules"
-  },
-  "emulators": {
-    "functions": { "port": 5001 },
-    "pubsub": { "port": 8085 },
-    "ui": { "enabled": true, "port": 4000 }
   },
   "hosting": {
     "public": "client/dist",

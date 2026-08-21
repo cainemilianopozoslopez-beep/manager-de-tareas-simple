@@ -1,0 +1,34 @@
+name: Enviar notificaciones push de tareas vencidas
+
+# Reemplaza a una Cloud Function programada (que necesitaría el plan Blaze de
+# pago de Firebase): este workflow corre gratis porque el repo es público.
+# GitHub no garantiza puntualidad exacta en cron — puede atrasarse unos
+# minutos en momentos de carga alta, aceptable para un recordatorio personal.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  check-due-tasks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependencias
+        working-directory: functions
+        run: npm install
+
+      - name: Revisar tareas vencidas y enviar push
+        working-directory: functions
+        run: npm run check-due-tasks
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_CONTACT_EMAIL: ${{ secrets.VAPID_CONTACT_EMAIL }}
+          APP_TIMEZONE: America/Mexico_City

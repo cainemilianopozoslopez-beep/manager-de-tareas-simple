@@ -10,8 +10,12 @@ firebase-debug.*.log*
 # Firebase cache
 .firebase/
 
-# Workflows de auto-publicación generados por Firebase CLI (no usados, publicamos manual)
-.github/
+# Workflows de auto-publicación generados por Firebase CLI (no usados, publicamos manual).
+# Listados por archivo (no todo .github/) para no ignorar también
+# send-due-pushes.yml, que sí está en uso.
+.github/workflows/firebase-hosting-pull-request.yml
+.github/workflows/firebase-hosting-merge.yml
+.github/workflows/deploy.yml
 
 # Firebase config
 
