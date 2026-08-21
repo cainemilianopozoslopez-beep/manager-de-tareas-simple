@@ -14,7 +14,12 @@ require('dotenv').config();
 const admin = require('firebase-admin');
 const webpush = require('web-push');
 
-const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+// GitHub's secret UI, and copy-paste in general, easily introduces a stray
+// trailing newline/space around a pasted value — trim every secret so that
+// doesn't turn into a cryptic "invalid base64"/JSON-parse failure.
+const env = (name) => (process.env[name] || '').trim();
+
+const serviceAccountJson = env('FIREBASE_SERVICE_ACCOUNT_JSON');
 if (!serviceAccountJson) {
   console.error('Falta FIREBASE_SERVICE_ACCOUNT_JSON (llave de cuenta de servicio de Firebase).');
   process.exit(1);
@@ -27,11 +32,11 @@ const db = admin.firestore();
 // rather than the CI runner's UTC clock (which would make an 08:00 task fire
 // at the wrong wall-clock hour). Matches the client, which always uses the
 // browser's local time (see client/src/taskUtils.js).
-const TIMEZONE = process.env.APP_TIMEZONE || 'America/Mexico_City';
+const TIMEZONE = env('APP_TIMEZONE') || 'America/Mexico_City';
 
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
-const VAPID_CONTACT = process.env.VAPID_CONTACT_EMAIL;
+const VAPID_PUBLIC_KEY = env('VAPID_PUBLIC_KEY');
+const VAPID_PRIVATE_KEY = env('VAPID_PRIVATE_KEY');
+const VAPID_CONTACT = env('VAPID_CONTACT_EMAIL');
 
 if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
   console.error('Falta VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY.');
