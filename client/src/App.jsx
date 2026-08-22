@@ -26,7 +26,7 @@ import {
   deleteUserAccount,
   logoutUser
 } from './firebase';
-import { isPushSupported, getExistingPushSubscription, subscribeToPush, unsubscribeFromPush } from './push';
+import { isPushSupported, getExistingPushSubscription, subscribeToPush, unsubscribeFromPush, needsIosInstallForPush } from './push';
 
 const BASE_CATEGORIES = ['trabajo', 'personal', 'urgente', 'ideas', 'general'];
 
@@ -1272,6 +1272,7 @@ export default function App() {
         onRequestPermission={requestNotificationPermission}
         pushSupported={isPushSupported()}
         pushSubscribed={Boolean(pushSubscription)}
+        needsIosInstall={needsIosInstallForPush()}
         onEnablePush={enablePushNotifications}
         onDisablePush={disablePushNotifications}
         onExportBackup={handleExportBackup}

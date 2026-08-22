@@ -13,6 +13,7 @@ export default function SettingsModal({
   onRequestPermission,
   pushSupported = false,
   pushSubscribed = false,
+  needsIosInstall = false,
   onEnablePush,
   onDisablePush,
   onExportBackup,
@@ -238,18 +239,28 @@ export default function SettingsModal({
               }}>
                 <div>
                   <div style={{ fontSize: '13px', fontWeight: '700', color: pushSubscribed ? 'var(--pulse-accent, #1967d2)' : 'var(--pulse-q2-accent, #b06000)' }}>
-                    {pushSubscribed ? '✅ Push activado en este dispositivo' : '📲 Notificaciones push (funcionan con la app cerrada)'}
+                    {pushSubscribed
+                      ? '✅ Push activado en este dispositivo'
+                      : needsIosInstall
+                        ? '📱 Instala TaskPulse para activar el push'
+                        : '📲 Notificaciones push (funcionan con la app cerrada)'}
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--gmail-text-secondary)', marginTop: '2px' }}>
                     {isGuest
                       ? 'Inicia sesión (no invitado) para poder usar push.'
                       : pushSubscribed
                         ? 'Este navegador recibirá alertas de tareas aunque la pestaña esté cerrada.'
-                        : 'A diferencia de las de arriba, estas llegan aunque cierres la pestaña.'}
+                        : needsIosInstall
+                          ? 'En iPhone/iPad, Safari solo permite push para apps agregadas a la pantalla de inicio: toca Compartir → "Agregar a inicio", abre TaskPulse desde ese ícono, y vuelve a entrar aquí.'
+                          : 'A diferencia de las de arriba, estas llegan aunque cierres la pestaña.'}
                   </div>
                 </div>
 
-                {!isGuest && (
+                {/* Only hide the "Activar" call-to-action on iOS-not-installed
+                    (it would just fail) — always allow disabling an existing
+                    subscription regardless, e.g. one created before the Home
+                    Screen icon was removed. */}
+                {!isGuest && (pushSubscribed || !needsIosInstall) && (
                   pushSubscribed ? (
                     <button
                       type="button"

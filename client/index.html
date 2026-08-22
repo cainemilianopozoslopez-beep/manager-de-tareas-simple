@@ -8,6 +8,14 @@
     <meta name="description" content="TaskPulse: gestor inteligente de tareas y prioridades en tiempo real, con matriz de Eisenhower, calendario y recordatorios." />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
+    <!-- Installability was previously removed on purpose; re-enabled specifically
+         because Web Push on iOS Safari ONLY works for a web app added to the Home
+         Screen — there's no way to get push notifications on iPhone without this. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="TaskPulse" />
+
     <title>TaskPulse — Gestor Inteligente de Tareas</title>
   </head>
   <body>

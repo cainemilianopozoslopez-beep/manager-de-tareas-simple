@@ -18,6 +18,23 @@ const subscriptionDocId = (endpoint) => btoa(endpoint).replace(/[^a-zA-Z0-9]/g, 
 export const isPushSupported = () =>
   typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window;
 
+// iOS/iPadOS Safari only supports Web Push for a site that's been added to the
+// Home Screen — `Notification`/`PushManager` exist in a regular Safari tab
+// (isPushSupported() above can return true there), but subscribing silently
+// fails because it's not actually usable outside that installed context.
+// `navigator.standalone` is Safari's own non-standard flag for that; the
+// display-mode media query is the standard equivalent other browsers use.
+export const isIos = () =>
+  typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+export const isRunningStandalone = () =>
+  typeof window !== 'undefined' &&
+  (window.navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)').matches);
+
+// True when push looks supported by the API surface but iOS will actually
+// reject it because the site hasn't been added to the Home Screen yet.
+export const needsIosInstallForPush = () => isIos() && !isRunningStandalone();
+
 export async function getExistingPushSubscription() {
   if (!isPushSupported()) return null;
   const registration = await navigator.serviceWorker.ready;
@@ -26,6 +43,9 @@ export async function getExistingPushSubscription() {
 
 export async function subscribeToPush(uid) {
   if (!isPushSupported()) throw new Error('Este navegador no soporta notificaciones push');
+  if (needsIosInstallForPush()) {
+    throw new Error('En iPhone/iPad, agrega TaskPulse a tu pantalla de inicio primero (Compartir → Agregar a inicio) y ábrela desde ahí antes de activar el push.');
+  }
   if (!VAPID_PUBLIC_KEY) throw new Error('Falta configurar la llave pública VAPID (VITE_VAPID_PUBLIC_KEY)');
 
   const registration = await navigator.serviceWorker.ready;
